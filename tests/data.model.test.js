@@ -31,4 +31,19 @@ describe('Data Model Test', () => {
         const err = data.validateSync();
         expect(err.errors.fileName).to.exist;
     });
+
+    it('should set default status to pending', () => {
+        const data = new Data(validData);
+        expect(data.status).to.equal('pending');
+    });
+
+    it('should convert tags to lowercase', () => {
+        const dataWithUppercaseTags = {
+            ...validData,
+            tags: ['TEST', 'Excel']
+        };
+        const data = new Data(dataWithUppercaseTags);
+        expect(data.tags[0]).to.equal('test');
+        expect(data.tags[1]).to.equal('excel');
+    });
 });

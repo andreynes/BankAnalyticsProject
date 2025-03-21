@@ -1,51 +1,19 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const xlsx = require('xlsx');
-const Data = require('../models/Data');
 const path = require('path');
 const fs = require('fs');
+const Data = require('../models/Data');
+const ExcelParser = require('../utils/excelParser');
 
-// Создаем промежуточное ПО для обработки ошибок
-const handleErrors = (err, req, res, next) => {
-    if (err instanceof multer.MulterError) {
-        // Ошибки multer
-        switch (err.code) {
-            case 'LIMIT_FILE_SIZE':
-                return res.status(400).json({ 
-                    error: 'Файл слишком большой. Максимальный размер 5MB' 
-                });
-            case 'LIMIT_UNEXPECTED_FILE':
-                return res.status(400).json({ 
-                    error: 'Неожиданное поле формы' 
-                });
-            default:
-                return res.status(400).json({ 
-                    error: Ошибка загрузки файла: ${err.message} 
-                });
-        }
-    } else if (err) {
-        // Другие ошибки
-        return res.status(500).json({ 
-            error: Внутренняя ошибка сервера: ${err.message} 
-        });
-    }
-    next();
-};
-
-// Добавляем проверку существования папки uploads
-const ensureUploadsDirectory = () => {
-    const uploadsDir = 'uploads';
-    if (!fs.existsSync(uploadsDir)){
-        fs.mkdirSync(uploadsDir);
-    }
-};
-
-// Настройка multer (оставляем как есть)
+// Настройка multer
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        ensureUploadsDirectory();
-        cb(null, 'uploads/');
+        const uploadDir = 'uploads';
+        if (!fs.existsSync(uploadDir)){
+            fs.mkdirSync(uploadDir);
+        }
+        cb(null, uploadDir);
     },
     filename: function (req, file, cb) {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -53,7 +21,6 @@ const storage = multer.diskStorage({
     }
 });
 
-// Улучшенный фильтр файлов
 const fileFilter = (req, file, cb) => {
     const allowedTypes = [
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -74,55 +41,65 @@ const upload = multer({
     }
 });
 
-// Обновленный endpoint с обработкой ошибок
+// POST endpoint для загрузки файла
 router.post('/', upload.single('file'), async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ 
+                success: false,
                 error: 'Файл не был загружен' 
             });
         }
 
-        const excelData = processExcelFile(req.file.path);
+        // Парсим Excel файл
+        const parseResult = await ExcelParser.parse(req.file.path);
         
+        // Проверяем результат парсинга
+        if (!parseResult.success) {
+            throw new Error(`Ошибка парсинга файла: ${parseResult.error}`);
+        }
+
+        // Валидируем данные
+        const validation = ExcelParser.validateData(parseResult);
+        if (!validation.isValid) {
+            throw new Error(`Ошибка валидации: ${validation.errors.join(', ')}`);
+        }
+
+        // Создаем запись в базе данных
         const newData = new Data({
             fileName: req.file.originalname,
-            data: excelData.data,
-            metadata: {
-                sheetName: excelData.sheetName,
-                totalRows: excelData.totalRows,
-                totalColumns: excelData.totalColumns,
-                fileSize: req.file.size
-            },
+            data: parseResult.data,
+            metadata: parseResult.metadata,
+            tags: parseResult.metadata.suggestedTags,
             status: 'processed'
         });
 
         await newData.save();
 
-        // Удаляем файл после обработки
+        // Удаляем временный файл
         fs.unlinkSync(req.file.path);
 
         res.status(200).json({ 
+            success: true,
             message: 'Файл успешно обработан и сохранен',
             fileId: newData._id,
-            metadata: newData.metadata
+            metadata: newData.metadata,
+            suggestedTags: newData.tags
         });
 
     } catch (error) {
-        // Если файл существует, удаляем его в случае ошибки
+        console.error('Ошибка при обработке файла:', error);
+        
+        // Удаляем временный файл в случае ошибки
         if (req.file && fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
         }
-        
-        console.error('Ошибка при обработке файла:', error);
+
         res.status(500).json({ 
-            error: 'Ошибка при обработке файла',
-            details: error.message 
+            success: false,
+            error: error.message 
         });
     }
 });
-
-// Добавляем обработчик ошибок
-router.use(handleErrors);
 
 module.exports = router;
