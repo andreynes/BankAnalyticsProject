@@ -4,7 +4,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const Data = require('../models/Data');
-const ExcelParser = require('../utils/excelParser');
+const ExcelProcessor = require('../utils/excelProcessor');
+const TagAssigner = require('../utils/tagAssigner');
 
 // Настройка multer
 const storage = multer.diskStorage({
@@ -29,7 +30,8 @@ const fileFilter = (req, file, cb) => {
     if (allowedTypes.includes(file.mimetype)) {
         cb(null, true);
     } else {
-        cb(new Error('Принимаются только файлы Excel (.xls, .xlsx)'), false);
+        cb(null, false);
+        return cb(new Error('Принимаются только файлы Excel (.xls, .xlsx)'));
     }
 };
 
@@ -39,67 +41,141 @@ const upload = multer({
     limits: {
         fileSize: 5 * 1024 * 1024 // 5MB
     }
-});
+}).single('file');
 
-// POST endpoint для загрузки файла
-router.post('/', upload.single('file'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ 
-                success: false,
-                error: 'Файл не был загружен' 
+router.post('/', (req, res) => {
+    upload(req, res, async function(err) {
+        try {
+            // Обработка ошибок multer
+            if (err instanceof multer.MulterError) {
+                const errorData = await Data.create({
+                    fileName: req.file ? req.file.originalname : 'unknown',
+                    status: 'failed',
+                    processingErrors: [{
+                        code: 'MULTER_ERROR',
+                        message: err.message
+                    }]
+                });
+                return res.status(400).json({
+                    success: false,
+                    error: 'Ошибка загрузки файла',
+                    details: err.message,
+                    errorId: errorData._id
+                });
+            }
+
+            // Обработка других ошибок загрузки
+            if (err) {
+                const errorData = await Data.create({
+                    fileName: req.file ? req.file.originalname : 'unknown',
+                    status: 'failed',
+                    processingErrors: [{
+                        code: 'UPLOAD_ERROR',
+                        message: err.message
+                    }]
+                });
+                return res.status(400).json({
+                    success: false,
+                    error: err.message,
+                    errorId: errorData._id
+                });
+            }
+
+            // Проверка наличия файла
+            if (!req.file) {
+                const errorData = await Data.create({
+                    fileName: 'unknown',
+                    status: 'failed',
+                    processingErrors: [{
+                        code: 'NO_FILE',
+                        message: 'Файл не был загружен'
+                    }]
+                });
+                return res.status(400).json({
+                    success: false,
+                    error: 'Файл не был загружен',
+                    errorId: errorData._id
+                });
+            }
+
+            // Обработка файла
+            const tagAssigner = new TagAssigner();
+            const processedData = await ExcelProcessor.processFile(req.file.path);
+            const taggedData = tagAssigner.assignTags(processedData);
+
+            // Создание записи в базе данных
+            const dataModel = new Data({
+                fileName: req.file.originalname,
+                data: processedData.data,
+                tags: taggedData.metadata.tagging.tags,
+                metadata: {
+                    sheetName: processedData.sheetName,
+                    totalRows: processedData.totalRows,
+                    totalColumns: processedData.totalColumns,
+                    processedAt: new Date(),
+                    fileSize: req.file.size,
+                    columnTypes: processedData.metadata.columnTypes,
+                    statistics: taggedData.metadata.tagging.statistics,
+                    tagging: {
+                        categories: taggedData.metadata.tagging.categories,
+                        autoTags: taggedData.metadata.tagging.tags,
+                        manualTags: []
+                    }
+                },
+                status: 'processed'
             });
+
+            const savedData = await dataModel.save();
+
+            // Удаление временного файла после успешной обработки
+            if (fs.existsSync(req.file.path)) {
+                fs.unlinkSync(req.file.path);
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: 'Файл успешно обработан и сохранен',
+                fileId: savedData._id,
+                metadata: savedData.metadata,
+                tags: savedData.tags
+            });
+
+        } catch (error) {
+            // Удаление временного файла в случае ошибки
+            if (req.file && fs.existsSync(req.file.path)) {
+                fs.unlinkSync(req.file.path);
+            }
+
+            // Сохранение информации об ошибке
+            try {
+                const errorData = await Data.create({
+                    fileName: req.file ? req.file.originalname : 'unknown',
+                    status: 'failed',
+                    processingErrors: [{
+                        code: 'PROCESSING_ERROR',
+                        message: error.message
+                    }]
+                });
+
+                return res.status(400).json({
+                    success: false,
+                    error: 'Ошибка при обработке файла',
+                    details: error.message,
+                    errorId: errorData._id
+                });
+            } catch (dbError) {
+                console.error('Ошибка при сохранении ошибки:', dbError);
+                return res.status(500).json({
+                    success: false,
+                    error: 'Внутренняя ошибка сервера',
+                    details: error.message
+                });
+            }
         }
-
-        // Парсим Excel файл
-        const parseResult = await ExcelParser.parse(req.file.path);
-        
-        // Проверяем результат парсинга
-        if (!parseResult.success) {
-            throw new Error(`Ошибка парсинга файла: ${parseResult.error}`);
-        }
-
-        // Валидируем данные
-        const validation = ExcelParser.validateData(parseResult);
-        if (!validation.isValid) {
-            throw new Error(`Ошибка валидации: ${validation.errors.join(', ')}`);
-        }
-
-        // Создаем запись в базе данных
-        const newData = new Data({
-            fileName: req.file.originalname,
-            data: parseResult.data,
-            metadata: parseResult.metadata,
-            tags: parseResult.metadata.suggestedTags,
-            status: 'processed'
-        });
-
-        await newData.save();
-
-        // Удаляем временный файл
-        fs.unlinkSync(req.file.path);
-
-        res.status(200).json({ 
-            success: true,
-            message: 'Файл успешно обработан и сохранен',
-            fileId: newData._id,
-            metadata: newData.metadata,
-            suggestedTags: newData.tags
-        });
-
-    } catch (error) {
-        console.error('Ошибка при обработке файла:', error);
-        
-        // Удаляем временный файл в случае ошибки
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
-
-        res.status(500).json({ 
-            success: false,
-            error: error.message 
-        });
-    }
+    });
 });
 
 module.exports = router;
+
+
+

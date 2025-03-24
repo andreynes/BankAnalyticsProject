@@ -1,38 +1,38 @@
-require('dotenv').config();
+'use strict';
 const express = require('express');
 const mongoose = require('mongoose');
-const uploadRoutes = require('./routes/upload');
+require('dotenv').config();
 
 const app = express();
 
-// Middleware
+// Middleware для обработки JSON и URL-кодированных данных
 app.use(express.json());
-app.use('/upload', uploadRoutes);
+app.use(express.urlencoded({ extended: true }));
 
-// MongoDB connection
-const connectDB = async () => {
-    try {
-        await mongoose.connect(process.env.MONGODB_URI);
-        console.log('Успешное подключение к MongoDB');
-    } catch (err) {
-        console.error('Ошибка подключения к MongoDB:', err);
-        process.exit(1);
-    }
-};
+// Подключение к MongoDB через mongoose
+const mongoURI = process.env.MONGO_URI;
+mongoose
+  .connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => console.error('MongoDB connection error:', err));
 
-// Test route
+// Подключение маршрутов
+const uploadRouter = require('./routes/upload');
+const searchRouter = require('./routes/search');
+
+// Маршрут для загрузки файлов
+app.use('/upload', uploadRouter);
+
+// Маршрут для поиска по ключевым словам
+app.use('/search', searchRouter);
+
+// Базовый маршрут для проверки работы сервера
 app.get('/', (req, res) => {
-    res.json({ message: 'Сервер работает!' });
+  res.send('Сервер работает');
 });
 
-// Подключаемся к базе данных только если не выполняются тесты
-if (process.env.NODE_ENV !== 'test') {
-    connectDB();
-}
-
-// Server
-const server = app.listen(process.env.PORT || 3000, () => {
-    console.log(`Сервер запущен на порту ${process.env.PORT || 3000}`);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Сервер запущен на порту ${PORT}`);
 });
 
-module.exports = { app, connectDB };

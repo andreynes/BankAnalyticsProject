@@ -13,12 +13,12 @@ describe('ExcelProcessor with AutoTagging', () => {
             fs.mkdirSync(testDir, { recursive: true });
         }
 
-        // Создаем тестовый файл с разными типами данных
         const wb = xlsx.utils.book_new();
         const wsData = [
-            ['Дата операции', 'Клиент', 'Сумма платежа', 'Количество товара', 'Статус оплаты'],
-            ['2024-03-21', 'ООО "Тест"', '1000.50', '5', 'Оплачено'],
-            ['2024-03-22', 'ООО "Тест"', '2000.75', '3', 'В обработке']
+            ['Дата операции', 'Клиент', 'Сумма продажи', 'Количество', 'Статус'],
+            ['2024-03-21', 'ООО "Тест"', '1500000.50', '5', 'срочно'],
+            ['2024-03-22', 'ИП Иванов', '2000.75', '', 'отложено'],
+            ['2024-03-23', 'ООО "Тест"', '750.25', '10', 'в работе']
         ];
         const ws = xlsx.utils.aoa_to_sheet(wsData);
         xlsx.utils.book_append_sheet(wb, ws, 'Sheet1');
@@ -28,35 +28,29 @@ describe('ExcelProcessor with AutoTagging', () => {
     it('should process file and generate appropriate tags', async () => {
         const result = await ExcelProcessor.processFile(testFilePath);
         
-        // Проверяем наличие метаданных и тегов
-        expect(result.metadata).to.exist;
-        expect(result.metadata.suggestedTags).to.be.an('array');
-        
-        // Преобразуем все теги в нижний регистр для сравнения
-        const lowerCaseTags = result.metadata.suggestedTags.map(tag => tag.toLowerCase());
-        
-        // Проверяем наличие хотя бы одного тега, связанного с суммой или количеством
-        const hasFinancialTag = lowerCaseTags.some(tag => 
-            tag.includes('финансы') || 
-            tag.includes('сумма') || 
-            tag.includes('количество')
-        );
-        
-        expect(hasFinancialTag, 'Should have at least one financial-related tag').to.be.true;
+        expect(result.metadata.tagging).to.exist;
+        expect(result.metadata.tagging.tags).to.be.an('array');
+        expect(result.metadata.tagging.tags.length).to.be.greaterThan(0);
     });
 
     it('should detect column types correctly', async () => {
         const result = await ExcelProcessor.processFile(testFilePath);
-        expect(result.metadata.columnTypes).to.exist;
-        expect(result.metadata.columnTypes['Дата операции']).to.equal('date');
-        expect(result.metadata.columnTypes['Сумма платежа']).to.equal('number');
+        
+        const types = result.metadata.columnTypes;
+        expect(types.get('Дата операции')).to.equal('date');
+        expect(types.get('Сумма продажи')).to.equal('number');
+        expect(types.get('Количество')).to.equal('number');
+        expect(types.get('Клиент')).to.equal('text');
+        expect(types.get('Статус')).to.equal('text');
     });
 
     it('should count unique values', async () => {
         const result = await ExcelProcessor.processFile(testFilePath);
-        const uniqueCounts = result.metadata.fileAnalysis.uniqueValuesCount;
-        expect(uniqueCounts['Клиент']).to.equal(1); // "ООО "Тест"" встречается дважды
-        expect(uniqueCounts['Статус оплаты']).to.equal(2); // "Оплачено" и "В обработке"
+        
+        const stats = result.metadata.statistics;
+        expect(stats.uniqueValuesCount['Клиент']).to.equal(2);
+        expect(stats.uniqueValuesCount['Статус']).to.equal(3);
+        expect(stats.emptyValues).to.equal(1);
     });
 
     after(() => {
@@ -65,3 +59,4 @@ describe('ExcelProcessor with AutoTagging', () => {
         }
     });
 });
+

@@ -7,11 +7,17 @@ class TagAssigner {
         // Специфические правила для бизнес-логики
         this.businessRules = {
             highValue: {
-                condition: (value) => this.parseAmount(value) > 1000000,
+                condition: (value) => {
+                    const amount = this.parseAmount(value);
+                    return amount !== null && amount > 1000000;
+                },
                 tag: 'крупная_сумма'
             },
             negativeValue: {
-                condition: (value) => this.parseAmount(value) < 0,
+                condition: (value) => {
+                    const amount = this.parseAmount(value);
+                    return amount !== null && amount < 0;
+                },
                 tag: 'отрицательное_значение'
             },
             emptyData: {
@@ -19,7 +25,7 @@ class TagAssigner {
                 tag: 'пустые_данные'
             },
             specialClient: {
-                condition: (value) => /ООО|ЗАО|ПАО|АО/.test(value),
+                condition: (value) => typeof value === 'string' && /ООО|ЗАО|ПАО|АО/.test(value),
                 tag: 'юридическое_лицо'
             }
         };
@@ -33,16 +39,9 @@ class TagAssigner {
         };
     }
 
-    /**
-     * Назначение тегов для данных
-     * @param {Object} data - данные для тегирования
-     * @returns {Object} - данные с тегами
-     */
     assignTags(data) {
-        // Получаем базовые теги от AutoTagger
         const basicTags = new Set(this.autoTagger.analyzeTags(data));
         
-        // Анализируем данные по бизнес-правилам
         if (data.data && Array.isArray(data.data)) {
             data.data.forEach(row => {
                 if (!row.row) return;
@@ -61,7 +60,6 @@ class TagAssigner {
             });
         }
 
-        // Добавляем метаданные
         const metadata = {
             tags: Array.from(basicTags),
             statistics: this.calculateStatistics(data),
@@ -77,11 +75,43 @@ class TagAssigner {
         };
     }
 
-    /**
-     * Проверка значения на соответствие категориям
-     * @param {string} value - проверяемое значение
-     * @param {Set} tags - набор тегов
-     */
+    parseAmount(value) {
+        if (value === null ||  value === undefined ||  value === '') {
+            return 0; // Возвращаем 0 вместо null для пустых значений
+        }
+        
+        if (typeof value === 'number') {
+            return value;
+        }
+        
+        try {
+            // Убираем все пробелы
+            let normalized = value.toString().trim().replace(/\s+/g, '');
+            if (!normalized) {
+                return 0;
+            }
+    
+            // Обрабатываем разные форматы чисел
+            if (normalized.includes(',')) {
+                if (normalized.includes('.')) {
+                    // Если есть и точка и запятая, убираем запятые (разделители тысяч)
+                    normalized = normalized.replace(/,/g, '');
+                } else {
+                    // Если есть только запятая, заменяем её на точку
+                    normalized = normalized.replace(',', '.');
+                }
+            }
+    
+            // Удаляем все символы кроме цифр, точки и минуса
+            normalized = normalized.replace(/[^\d.-]/g, '');
+    
+            const parsed = parseFloat(normalized);
+            return isNaN(parsed) ? 0 : parsed; // Возвращаем 0 вместо null для невалидных чисел
+        } catch (error) {
+            return 0; // Возвращаем 0 в случае ошибки
+        }
+    }
+
     checkCategories(value, tags) {
         if (!value) return;
         const strValue = value.toString().toLowerCase();
@@ -93,42 +123,6 @@ class TagAssigner {
         });
     }
 
-    /**
-     * Парсинг числового значения
-     * @param {string|number} value - значение для парсинга
-     * @returns {number}
-     */
-    parseAmount(value) {
-        if (!value) return 0;
-        if (typeof value === 'number') return value;
-        
-        // Сначала удаляем все пробелы
-        let normalized = value.toString().replace(/\s+/g, '');
-        
-        // Обрабатываем разные форматы чисел
-        if (normalized.includes(',')) {
-            // Если есть и точка и запятая, считаем запятую разделителем тысяч
-            if (normalized.includes('.')) {
-                normalized = normalized.replace(/,/g, '');
-            } else {
-                // Иначе считаем запятую десятичным разделителем
-                normalized = normalized.replace(',', '.');
-            }
-        }
-        
-        // Удаляем все нечисловые символы, кроме точки и минуса
-        normalized = normalized.replace(/[^\d.-]/g, '');
-        
-        const result = parseFloat(normalized);
-        return
-        sNaN(result) ? 0 : result;
-    }
-
-    /**
-     * Расчет статистики по данным
-     * @param {Object} data - анализируемые данные
-     * @returns {Object} статистика
-     */
     calculateStatistics(data) {
         const stats = {
             totalRows: 0,
@@ -147,70 +141,26 @@ class TagAssigner {
 
         stats.totalRows = data.data.length;
 
-        // Создаем карту для анализа всех колонок
-        const columnAnalysis = new Map();
-        data.headers.forEach(header => {
-            // Инициализируем анализ для каждой колонки
-            columnAnalysis.set(header, {
-                numerical: 0,
-                categorical: 0,
-                empty: 0,
-                total: 0,
-                // Если есть предопределенный тип, сохраняем его
-                predefinedType: data.metadata?.columnTypes?.[header]
+        // Используем предопределенные типы из метаданных
+        if (data.metadata?.columnTypes) {
+            Object.entries(data.metadata.columnTypes).forEach(([column, type]) => {
+                if (type === 'number') {
+                    stats.numericalColumns.add(column);
+                } else {
+                    stats.categoricalColumns.add(column);
+                }
             });
-        });
+        }
 
-        // Анализируем данные
+        // Подсчитываем пустые значения
         data.data.forEach(row => {
             if (!row.row) return;
-            
-            for (let [header, value] of row.row) {
-                const analysis = columnAnalysis.get(header);
-                if (!analysis) continue;
-
-                analysis.total++;
-                
+            for (let [_, value] of row.row) {
                 if (!value || value.toString().trim() === '') {
                     stats.emptyValues++;
-                    analysis.empty++;
-                    continue;
-                }
-
-                const numValue = this.parseAmount(value);
-                if (!isNaN(numValue) && numValue.toString() === value.toString().trim()) {
-                    analysis.numerical++;
-                } else {
-                    analysis.categorical++;
                 }
             }
         });
-
-        // Определяем тип для каждой колонки
-        for (let [header, analysis] of columnAnalysis) {
-            // Если есть предопределенный тип, используем его
-            if (analysis.predefinedType) {
-                if (analysis.predefinedType === 'number') {
-                    stats.numericalColumns.add(header);
-                } else {
-                    stats.categoricalColumns.add(header);
-                }
-                continue;
-            }
-
-            // Для колонок без предопределенного типа
-            if (analysis.total === 0) {
-                stats.categoricalColumns.add(header);
-                continue;
-            }
-
-            const nonEmpty = analysis.total - analysis.empty;
-            if (nonEmpty > 0 && (analysis.numerical / nonEmpty) > 0.7) {
-                stats.numericalColumns.add(header);
-            } else {
-                stats.categoricalColumns.add(header);
-            }
-        }
 
         return {
             ...stats,
@@ -219,11 +169,6 @@ class TagAssigner {
         };
     }
 
-    /**
-     * Группировка тегов по категориям
-     * @param {Array} tags - список тегов
-     * @returns {Object} сгруппированные теги
-     */
     groupByCategories(tags) {
         const groups = {
             business: [],

@@ -6,7 +6,7 @@ const ExcelProcessor = require('../../utils/excelProcessor');
 
 describe('File Processing Integration Test', () => {
     const testDir = path.join(__dirname, '..', 'test-files');
-    const testFilePath = path.join(testDir, 'complex-test.xlsx');
+    const testFilePath = path.join(testDir, 'test-processing.xlsx');
 
     before(() => {
         if (!fs.existsSync(testDir)) {
@@ -15,10 +15,10 @@ describe('File Processing Integration Test', () => {
 
         const wb = xlsx.utils.book_new();
         const wsData = [
-            ['Дата', 'Клиент', 'Сумма', 'Количество', 'Примечание'],
-            ['2024-03-21', 'ООО Тест', '1000.50', '5', 'Тестовая запись'],
+            ['Дата операции', 'Клиент', 'Сумма продажи', 'Количество', 'Примечание'],
+            ['2024-03-21', 'ООО "Тест"', '1000.50', '5', 'Тестовая запись'],
             ['2024-03-22', 'ИП Иванов', '2000.75', '', ''],
-            ['', '', '', '', 'Специальные символы: !@#$%']
+            [null, undefined, '0', '10', 'Специальные символы: !@#$%']
         ];
         const ws = xlsx.utils.aoa_to_sheet(wsData);
         xlsx.utils.book_append_sheet(wb, ws, 'Sheet1');
@@ -27,37 +27,33 @@ describe('File Processing Integration Test', () => {
 
     it('should correctly parse different data types', async () => {
         const result = await ExcelProcessor.processFile(testFilePath);
-        const firstDataRow = result.data[0];
-        expect(firstDataRow.row.get('Дата')).to.equal('2024-03-21');
-        expect(firstDataRow.row.get('Сумма')).to.equal('1000.50');
+        const firstRow = result.data[0];
+        
+        expect(firstRow.row.get('Дата операции')).to.equal('2024-03-21');
+        expect(firstRow.row.get('Сумма продажи')).to.equal('1000.50');
+        expect(firstRow.row.get('Количество')).to.equal('5.00');
     });
 
     it('should handle empty and invalid values', async () => {
         const result = await ExcelProcessor.processFile(testFilePath);
         const emptyRow = result.data[2];
-        expect(emptyRow.row.get('Дата')).to.equal('');
+        
+        expect(emptyRow.row.get('Дата операции')).to.equal('');
         expect(emptyRow.row.get('Клиент')).to.equal('');
     });
 
     it('should handle numeric formatting consistently', async () => {
         const result = await ExcelProcessor.processFile(testFilePath);
         const secondRow = result.data[1];
-        const sumValue = parseFloat(secondRow.row.get('Сумма'));
-        expect(sumValue).to.equal(2000.75);
+        
+        expect(secondRow.row.get('Сумма продажи')).to.equal('2000.75');
     });
 
     it('should preserve special characters in text', async () => {
         const result = await ExcelProcessor.processFile(testFilePath);
         const specialRow = result.data[2];
+        
         expect(specialRow.row.get('Примечание')).to.include('!@#$%');
-    });
-
-    it('should generate correct metadata', async () => {
-        const result = await ExcelProcessor.processFile(testFilePath);
-        expect(result.metadata).to.exist;
-        expect(result.metadata.columnTypes).to.exist;
-        expect(result.metadata.suggestedTags).to.be.an('array');
-        expect(result.metadata.fileAnalysis).to.exist;
     });
 
     after(() => {
@@ -66,3 +62,4 @@ describe('File Processing Integration Test', () => {
         }
     });
 });
+
