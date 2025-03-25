@@ -6,7 +6,6 @@
 ```
 backend/
 ├── ARCHITECTURE.md
-├── SampleN2.xlsx
 ├── add-in/
 │   ├── manifest.xml
 │   └── src/
@@ -26,8 +25,6 @@ backend/
 ├── routes/
 │   ├── search.js
 │   └── upload.js
-├── sample.xlsx
-├── sampleN.xlsx
 ├── server.js
 ├── tests/
 │   ├── autoTagger.test.js
@@ -51,43 +48,23 @@ backend/
 │       └── createTestFile.js
 ├── updateArchitecture.py
 ├── uploads/
-│   ├── 1742837414706-sample3.xlsx
-│   ├── 1742837615473-sample.xlsx
-│   ├── 1742837618900-sample.xlsx
-│   ├── 1742838422007-sample.xlsx
-│   ├── 1742838425622-sample.xlsx
-│   ├── 1742838652945-sample.xlsx
-│   ├── 1742838655710-sample.xlsx
-│   ├── 1742838797911-sample3.xlsx
-│   ├── 1742839432550-sampleN.xlsx
-│   ├── 1742887081229-sample.xlsx
-│   ├── 1742887083137-sample.xlsx
-│   └── 1742887582334-SampleN2.xlsx
-├── utils/
-│   ├── autoTagger.js
-│   ├── excelFormatHandler.js
-│   ├── excelParser.js
-│   ├── excelProcessor.js
-│   ├── excelReader.js
-│   └── tagAssigner.js
-├── Поли3.xlsx
-├── Полипласт.xlsx
-└── Полипласт2.xlsx
+│   └── 1742900725867-Полипласт_данные.xlsx
+└── utils/
+    ├── autoTagger.js
+    ├── excelFormatHandler.js
+    ├── excelParser.js
+    ├── excelProcessor.js
+    ├── excelReader.js
+    └── tagAssigner.js
 ```
 
 ### Папка: .
 Содержимые файлы:
 - ARCHITECTURE.md
-- SampleN2.xlsx
 - package-lock.json
 - package.json
-- sample.xlsx
-- sampleN.xlsx
 - server.js
 - updateArchitecture.py
-- Поли3.xlsx
-- Полипласт.xlsx
-- Полипласт2.xlsx
 
 **Детали по файлам:**
 - **Файл**: updateArchitecture.py (язык: python)
@@ -112,7 +89,7 @@ backend/
     - *Импорты:* re
 - **Файл**: server.js (язык: js)
   - File_imports: **server.js**
-    - *Импорты:* ./config/db, ./routes/upload, ./routes/search
+    - *Импорты:* ./routes/upload, ./config/db, ./routes/search
 
 ### Папка: add-in
 Содержимые файлы:
@@ -126,14 +103,30 @@ backend/
 
 **Детали по файлам:**
 - **Файл**: taskpane.js (язык: js)
-  - Function: **formatResults**
-    - *Описание:* taskpane.js Пример запроса к backend API (укажите правильный URL)
+  - Function: **onSearch**
+    - *Описание:* SVG-иконки (копирование и зеленая галочка) в стиле Jay Copilot Данные выручки по годам Данные чистой прибыли по годам (значения из требования)
+  - Function: **showRevenueYear**
+    - *Описание:* Отображение выручки за конкретный год с кнопкой копирования (индивидуальный результат – plain text)
+  - Function: **showRevenueTable**
+    - *Описание:* Отображение таблицы с выручкой по всем годам (команда "полипласт выручка")
+  - Function: **showNetProfitTable**
+    - *Описание:* Назначаем обработчики для копирования отдельных строк (plain text) Обработчик глобальной кнопки копирования таблицы – копирование таблицы в формате HTML без колонки "Копировать" Отображение таблицы с чистой прибылью по всем годам (команда "полипласт чистая прибыль")
+  - Function: **showCompanyIndicators**
+    - *Описание:* Отображение комбинированной таблицы с показателями (команда "полипласт")
   - Function: **showResult**
-    - *Описание:* Здесь можно настроить форматирование полученных данных
+    - *Описание:* Вставка HTML результата в контейнер #result
+  - Function: **copyWithFeedback**
+    - *Описание:* Функция копирования с обратной связью Если isHtml === true, копируем HTML (с обоими форматами), иначе – просто текст.
+  - Function: **showFeedback**
+    - *Описание:* Отображение обратной связи – замена содержимого кнопки на галочку с текстом "Скопировано"
+  - Function: **copyTableHtml**
+    - *Описание:* Функция копирования HTML таблицы без столбца "Копировать"
+  - Function: **formatNumber**
+    - *Описание:* Клонируем таблицу Удаляем последний столбец из заголовка Удаляем последний столбец из каждой строки tbody Функция форматирования числа – добавление разделителей
 - **Файл**: taskpane.html (язык: html)
   - Html: **taskpane.html**
     - *Описание:* HTML файл
-    - *Импорты:* taskpane.js, taskpane.css
+    - *Импорты:* taskpane.css, taskpane.js
 
 ### Папка: config
 Содержимые файлы:
@@ -246,18 +239,7 @@ backend/
 
 ### Папка: uploads
 Содержимые файлы:
-- 1742837414706-sample3.xlsx
-- 1742837615473-sample.xlsx
-- 1742837618900-sample.xlsx
-- 1742838422007-sample.xlsx
-- 1742838425622-sample.xlsx
-- 1742838652945-sample.xlsx
-- 1742838655710-sample.xlsx
-- 1742838797911-sample3.xlsx
-- 1742839432550-sampleN.xlsx
-- 1742887081229-sample.xlsx
-- 1742887083137-sample.xlsx
-- 1742887582334-SampleN2.xlsx
+- 1742900725867-Полипласт_данные.xlsx
 
 ### Папка: utils
 Содержимые файлы:
