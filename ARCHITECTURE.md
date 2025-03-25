@@ -5,6 +5,16 @@
 
 ```
 backend/
+├── ARCHITECTURE.md
+├── SampleN2.xlsx
+├── add-in/
+│   ├── manifest.xml
+│   └── src/
+│       ├── taskpane.css
+│       ├── taskpane.html
+│       └── taskpane.js
+├── config/
+│   └── db.js
 ├── docs/
 │   └── architecture.md
 ├── models/
@@ -14,7 +24,10 @@ backend/
 ├── package-lock.json
 ├── package.json
 ├── routes/
+│   ├── search.js
 │   └── upload.js
+├── sample.xlsx
+├── sampleN.xlsx
 ├── server.js
 ├── tests/
 │   ├── autoTagger.test.js
@@ -30,13 +43,26 @@ backend/
 │   │   ├── fullProcessing.test.js
 │   │   └── upload.integration.test.js
 │   ├── tagAssigner.test.js
+│   ├── test-files/
+│   │   └── sample.xlsx
 │   ├── testDataCreation.js
 │   ├── upload.test.js
 │   └── utils/
 │       └── createTestFile.js
 ├── updateArchitecture.py
 ├── uploads/
-│   └── 1742557020770-526458541.xlsx
+│   ├── 1742837414706-sample3.xlsx
+│   ├── 1742837615473-sample.xlsx
+│   ├── 1742837618900-sample.xlsx
+│   ├── 1742838422007-sample.xlsx
+│   ├── 1742838425622-sample.xlsx
+│   ├── 1742838652945-sample.xlsx
+│   ├── 1742838655710-sample.xlsx
+│   ├── 1742838797911-sample3.xlsx
+│   ├── 1742839432550-sampleN.xlsx
+│   ├── 1742887081229-sample.xlsx
+│   ├── 1742887083137-sample.xlsx
+│   └── 1742887582334-SampleN2.xlsx
 ├── utils/
 │   ├── autoTagger.js
 │   ├── excelFormatHandler.js
@@ -44,16 +70,22 @@ backend/
 │   ├── excelProcessor.js
 │   ├── excelReader.js
 │   └── tagAssigner.js
+├── Поли3.xlsx
 ├── Полипласт.xlsx
 └── Полипласт2.xlsx
 ```
 
 ### Папка: .
 Содержимые файлы:
+- ARCHITECTURE.md
+- SampleN2.xlsx
 - package-lock.json
 - package.json
+- sample.xlsx
+- sampleN.xlsx
 - server.js
 - updateArchitecture.py
+- Поли3.xlsx
 - Полипласт.xlsx
 - Полипласт2.xlsx
 
@@ -80,7 +112,32 @@ backend/
     - *Импорты:* re
 - **Файл**: server.js (язык: js)
   - File_imports: **server.js**
-    - *Импорты:* ./routes/upload
+    - *Импорты:* ./config/db, ./routes/upload, ./routes/search
+
+### Папка: add-in
+Содержимые файлы:
+- manifest.xml
+
+### Папка: add-in/src
+Содержимые файлы:
+- taskpane.css
+- taskpane.html
+- taskpane.js
+
+**Детали по файлам:**
+- **Файл**: taskpane.js (язык: js)
+  - Function: **formatResults**
+    - *Описание:* taskpane.js Пример запроса к backend API (укажите правильный URL)
+  - Function: **showResult**
+    - *Описание:* Здесь можно настроить форматирование полученных данных
+- **Файл**: taskpane.html (язык: html)
+  - Html: **taskpane.html**
+    - *Описание:* HTML файл
+    - *Импорты:* taskpane.js, taskpane.css
+
+### Папка: config
+Содержимые файлы:
+- db.js
 
 ### Папка: docs
 Содержимые файлы:
@@ -92,12 +149,16 @@ backend/
 
 ### Папка: routes
 Содержимые файлы:
+- search.js
 - upload.js
 
 **Детали по файлам:**
 - **Файл**: upload.js (язык: js)
   - File_imports: **upload.js**
-    - *Импорты:* ../models/Data, ../utils/tagAssigner, ../utils/excelProcessor
+    - *Импорты:* ../utils/excelProcessor, ../models/Data
+- **Файл**: search.js (язык: js)
+  - File_imports: **search.js**
+    - *Импорты:* ../models/Data
 
 ### Папка: tests
 Содержимые файлы:
@@ -116,13 +177,16 @@ backend/
 **Детали по файлам:**
 - **Файл**: data.model.test.js (язык: js)
   - File_imports: **data.model.test.js**
-    - *Импорты:* ../models/Data
+    - *Импорты:* ../config/db, ../models/Data
 - **Файл**: excelReader.test.js (язык: js)
   - File_imports: **excelReader.test.js**
     - *Импорты:* ../utils/excelReader
 - **Файл**: testDataCreation.js (язык: js)
   - File_imports: **testDataCreation.js**
     - *Импорты:* ../models/Data
+- **Файл**: database.test.js (язык: js)
+  - File_imports: **database.test.js**
+    - *Импорты:* ../config/db
 - **Файл**: excelFormatHandler.test.js (язык: js)
   - File_imports: **excelFormatHandler.test.js**
     - *Импорты:* ../utils/excelFormatHandler
@@ -131,7 +195,7 @@ backend/
     - *Импорты:* ../utils/excelProcessor
 - **Файл**: tagAssigner.test.js (язык: js)
   - File_imports: **tagAssigner.test.js**
-    - *Импорты:* ../utils/tagAssigner
+    - *Импорты:* ../utils/autoTagger
 - **Файл**: edge-cases.test.js (язык: js)
   - File_imports: **edge-cases.test.js**
     - *Импорты:* ../utils/excelProcessor
@@ -146,7 +210,7 @@ backend/
     - *Метод:* looksLikePercentage
 - **Файл**: upload.test.js (язык: js)
   - File_imports: **upload.test.js**
-    - *Импорты:* ../server, ../models/Data
+    - *Импорты:* ../server, ../config/db
 - **Файл**: excelParser.test.js (язык: js)
   - File_imports: **excelParser.test.js**
     - *Импорты:* ../utils/excelParser
@@ -163,10 +227,14 @@ backend/
     - *Импорты:* ../../utils/excelProcessor
 - **Файл**: upload.integration.test.js (язык: js)
   - File_imports: **upload.integration.test.js**
-    - *Импорты:* ../../models/Data, ../../server
+    - *Импорты:* ../../config/db, ../../server
 - **Файл**: fileProcessing.test.js (язык: js)
   - File_imports: **fileProcessing.test.js**
     - *Импорты:* ../../utils/excelProcessor
+
+### Папка: tests/test-files
+Содержимые файлы:
+- sample.xlsx
 
 ### Папка: tests/utils
 Содержимые файлы:
@@ -178,7 +246,18 @@ backend/
 
 ### Папка: uploads
 Содержимые файлы:
-- 1742557020770-526458541.xlsx
+- 1742837414706-sample3.xlsx
+- 1742837615473-sample.xlsx
+- 1742837618900-sample.xlsx
+- 1742838422007-sample.xlsx
+- 1742838425622-sample.xlsx
+- 1742838652945-sample.xlsx
+- 1742838655710-sample.xlsx
+- 1742838797911-sample3.xlsx
+- 1742839432550-sampleN.xlsx
+- 1742887081229-sample.xlsx
+- 1742887083137-sample.xlsx
+- 1742887582334-SampleN2.xlsx
 
 ### Папка: utils
 Содержимые файлы:
@@ -192,17 +271,10 @@ backend/
 **Детали по файлам:**
 - **Файл**: excelProcessor.js (язык: js)
   - Class: **ExcelProcessor**
-  - File_imports: **excelProcessor.js**
-    - *Импорты:* ./excelReader, ./autoTagger
+    - *Поля:* rawData, label, label, cell, cell, cell, s, s, cell
 - **Файл**: autoTagger.js (язык: js)
   - Class: **AutoTagger**
-    - *Поля:* value
-    - *Метод:* constructor
     - *Метод:* analyzeTags
-    - *Метод:* analyzeDataContent
-    - *Метод:* looksLikeDate
-    - *Метод:* looksLikeMoney
-    - *Метод:* looksLikePercentage
 - **Файл**: excelFormatHandler.js (язык: js)
   - Class: **ExcelFormatHandler**
     - *Поля:* value

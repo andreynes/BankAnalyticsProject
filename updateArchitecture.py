@@ -642,3 +642,4 @@ def update_architecture_md(content_lines):
 if __name__ == "__main__":
    lines = main()
    update_architecture_md(lines)
+   

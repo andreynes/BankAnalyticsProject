@@ -1,19 +1,23 @@
 'use strict';
 
 const path = require('path');
-// Загружаем переменные окружения из файла .env, который находится в папке backend
+const express = require('express');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 console.log("MONGO_URI:", process.env.MONGO_URI);
 
-const express = require('express');
 const app = express();
+
+// Подключаем middleware для отдачи статических файлов из папки add-in/src
+app.use(express.static(path.join(__dirname, 'add-in', 'src')));
+
+// Middleware для парсинга JSON и urlencoded данных
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Подключаем модуль подключения к базе данных
 const connectDB = require('./config/db');
-
-// Middlewares для парсинга JSON и urlencoded данных
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Вызываем подключение к БД
+connectDB();
 
 // Подключаем маршруты
 const uploadRouter = require('./routes/upload');
@@ -24,18 +28,14 @@ app.use('/search', searchRouter);
 
 // Базовый маршрут для проверки работы сервера
 app.get('/', (req, res) => {
-  res.send('Сервер работает');
+    res.send('Сервер работает');
 });
 
-// Подключение к MongoDB
-connectDB();
-
-// Запуск сервера (не в режиме тестирования)
 const PORT = process.env.PORT || 3000;
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => {
-    console.log(`Сервер запущен на порту ${PORT}`);
-  });
+    app.listen(PORT, () => {
+        console.log(`Сервер запущен на порту ${PORT}`);
+    });
 }
 
 module.exports = app;
