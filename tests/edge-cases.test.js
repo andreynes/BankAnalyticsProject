@@ -1,3 +1,5 @@
+"use strict";
+
 const { expect } = require('chai');
 const path = require('path');
 const xlsx = require('xlsx');
@@ -17,10 +19,16 @@ describe('Edge Cases Testing', () => {
         const wb = xlsx.utils.book_new();
         const wsData = [
             ['Дата операции', 'Клиент', 'Сумма продажи', 'Количество', 'Статус'],
-            ['', '', '', '', ''],  // Пустая строка
-            [' ', ' ', ' ', ' ', ' '],  // Строка с пробелами
-            ['a'.repeat(1000), 'b'.repeat(1000), 'c'.repeat(1000), 'd'.repeat(1000), 'e'.repeat(1000)],  // Длинные значения
-            ['!@#$%^&*()', '特殊文字', '12,345.67', '-1000', '✓']  // Специальные символы
+            ['', '', '', '', ''],  // пустая строка
+            [' ', ' ', ' ', ' ', ' '],  // строка с пробелами
+            [
+              'a'.repeat(1000),
+              'b'.repeat(1000),
+              'c'.repeat(1000),
+              'd'.repeat(1000),
+              'e'.repeat(1000)
+            ],  // длинные значения
+            ['!@#$%^&*()', '特殊文字', '12,345.67', '-1000', '✓']  // специальные символы
         ];
         const ws = xlsx.utils.aoa_to_sheet(wsData);
         xlsx.utils.book_append_sheet(wb, ws, 'Sheet1');
@@ -29,29 +37,29 @@ describe('Edge Cases Testing', () => {
 
     it('should handle empty rows', async () => {
         const result = await ExcelProcessor.processFile(testFilePath);
+        // Берем первую строку данных (row index 1, т.е. первая запись после заголовков)
         const emptyRow = result.data[0];
-        
-        for (const [_, value] of emptyRow.row) {
+        for (const [key, value] of emptyRow.row.entries()) {
             expect(value).to.equal('');
         }
     });
 
     it('should trim headers and values', async () => {
         const result = await ExcelProcessor.processFile(testFilePath);
+        // Берем вторую строку данных (т.е. row index 2)
         const spaceRow = result.data[1];
-        
-        for (const [_, value] of spaceRow.row) {
+        for (const [key, value] of spaceRow.row.entries()) {
             expect(value).to.equal('');
         }
     });
 
     it('should handle very long values', async () => {
         const result = await ExcelProcessor.processFile(testFilePath);
+        // Берем третью строку данных (row index 3)
         const longRow = result.data[2];
-        
         let foundLongValue = false;
-        for (const [_, value] of longRow.row) {
-            if (value.length === 1000) {
+        for (const [key, value] of longRow.row.entries()) {
+            if (typeof value === 'string' && value.length === 1000) {
                 foundLongValue = true;
                 break;
             }
@@ -61,22 +69,20 @@ describe('Edge Cases Testing', () => {
 
     it('should handle special characters', async () => {
         const result = await ExcelProcessor.processFile(testFilePath);
+        // Берем четвертую строку данных (row index 4)
         const specialRow = result.data[3];
-        
         const values = Array.from(specialRow.row.values());
         expect(values).to.include('!@#$%^&*()');
         expect(values).to.include('特殊文字');
         expect(values).to.include('✓');
-        
-        const numValue = parseFloat(specialRow.row.get('Сумма продажи'));
+        // Проверяем числовое значение: для столбца "Сумма продажи"
+        const numValue = parseFloat(specialRow.row.get('Сумма продажи').toString().replace(',', '.'));
         expect(numValue).to.equal(12345.67);
     });
 
     it('should validate data types', async () => {
         const result = await ExcelProcessor.processFile(testFilePath);
-        
         expect(result.metadata.columnTypes).to.exist;
-        
         const types = result.metadata.columnTypes;
         expect(types.get('Дата операции')).to.equal('date');
         expect(types.get('Сумма продажи')).to.equal('number');
