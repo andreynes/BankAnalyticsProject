@@ -1,196 +1,152 @@
+"use strict";
+
 const AutoTagger = require('./autoTagger');
 
 class TagAssigner {
-    constructor() {
-        this.autoTagger = new AutoTagger();
-        
-        // Специфические правила для бизнес-логики
-        this.businessRules = {
-            highValue: {
-                condition: (value) => {
-                    const amount = this.parseAmount(value);
-                    return amount !== null && amount > 1000000;
-                },
-                tag: 'крупная_сумма'
-            },
-            negativeValue: {
-                condition: (value) => {
-                    const amount = this.parseAmount(value);
-                    return amount !== null && amount < 0;
-                },
-                tag: 'отрицательное_значение'
-            },
-            emptyData: {
-                condition: (value) => !value || value.toString().trim() === '',
-                tag: 'пустые_данные'
-            },
-            specialClient: {
-                condition: (value) => typeof value === 'string' && /ООО|ЗАО|ПАО|АО/.test(value),
-                tag: 'юридическое_лицо'
-            }
-        };
+  constructor() {
+    this.autoTagger = new AutoTagger();
 
-        // Категории для классификации данных
-        this.categories = {
-            'высокий_приоритет': ['срочно', 'важно', 'критично'],
-            'низкий_приоритет': ['отложено', 'в очереди', 'черновик'],
-            'документы': ['договор', 'счет', 'акт', 'накладная'],
-            'статусы': ['новый', 'в работе', 'завершен', 'отменен']
-        };
+    // Бизнес-правила для присвоения тегов, зависят от показателя и его значений
+    this.businessRules = {
+      highRevenue: {
+        // Если показатель содержит "выручка" или "revenue" и значение больше 1 млн
+        condition: (indicator, value) => {
+          if (/выручка|revenue/i.test(indicator)) {
+            return value > 1000000;
+          }
+          return false;
+        },
+        tag: 'крупная_выручка'
+      },
+      highProfit: {
+        // Если показатель содержит "прибыль" или "profit" и значение больше 500 тыс.
+        condition: (indicator, value) => {
+          if (/прибыль|profit/i.test(indicator)) {
+            return value > 500000;
+          }
+          return false;
+        },
+        tag: 'крупная_прибыль'
+      },
+      negativeValue: {
+        // Если значение отрицательное
+        condition: (indicator, value) => {
+          return value < 0;
+        },
+        tag: 'отрицательное_значение'
+      },
+      emptyData: {
+        // Если значение пустое или не задано
+        condition: (indicator, value) => {
+          return value === null || value === undefined || value === '';
+        },
+        tag: 'пустые_данные'
+      }
+    };
+
+    // Категории для группировки тегов (расширяем по необходимости)
+    this.categories = {
+      'финансы': ['выручка', 'прибыль', 'ebitda'],
+      'результаты': ['рост', 'снижение']
+    };
+  }
+
+  /*
+   Метод assignTags ожидает объект data со структурой:
+   {
+     sheetData: [
+       [ companyName, date1, date2, ... ],
+       [ indicator1, value11, value12, ... ],
+       [ indicator2, value21, value22, ... ],
+       ...
+     ],
+     metadata: { ... }
+   }
+   
+   Процесс:
+   - Извлекает название компании из первой ячейки заголовка и добавляет его как тег.
+   - Вызывает AutoTagger для получения базовых тегов.
+   - Для каждой строки (начиная со второй) рассматривает значение показателя (первый элемент строки)
+     и его числовые значения (остальные элементы), применяет бизнес-правила и категории.
+   - Объединяет все теги и добавляет их в data.metadata.tagging.
+   
+   Возвращает обновленный объект data.
+  */
+  assignTags(data) {
+    const sheetData = data.sheetData;
+    if (!sheetData || sheetData.length < 2) {
+      return data;
     }
 
-    assignTags(data) {
-        const basicTags = new Set(this.autoTagger.analyzeTags(data));
-        
-        if (data.data && Array.isArray(data.data)) {
-            data.data.forEach(row => {
-                if (!row.row) return;
-                
-                for (let [header, value] of row.row) {
-                    // Применяем бизнес-правила
-                    Object.values(this.businessRules).forEach(rule => {
-                        if (rule.condition(value)) {
-                            basicTags.add(rule.tag);
-                        }
-                    });
+    const headerRow = sheetData[0];
+    const companyName = headerRow[0];
+    let basicTags = new Set();
 
-                    // Проверяем категории
-                    this.checkCategories(value, basicTags);
-                }
-            });
-        }
-
-        const metadata = {
-            tags: Array.from(basicTags),
-            statistics: this.calculateStatistics(data),
-            categories: this.groupByCategories(Array.from(basicTags))
-        };
-
-        return {
-            ...data,
-            metadata: {
-                ...data.metadata,
-                tagging: metadata
-            }
-        };
+    if (companyName) {
+      basicTags.add(companyName.toString().toLowerCase().replace(/\s+/g, '_'));
     }
 
-    parseAmount(value) {
-        if (value === null ||  value === undefined ||  value === '') {
-            return 0; // Возвращаем 0 вместо null для пустых значений
-        }
-        
-        if (typeof value === 'number') {
-            return value;
-        }
-        
-        try {
-            // Убираем все пробелы
-            let normalized = value.toString().trim().replace(/\s+/g, '');
-            if (!normalized) {
-                return 0;
-            }
-    
-            // Обрабатываем разные форматы чисел
-            if (normalized.includes(',')) {
-                if (normalized.includes('.')) {
-                    // Если есть и точка и запятая, убираем запятые (разделители тысяч)
-                    normalized = normalized.replace(/,/g, '');
-                } else {
-                    // Если есть только запятая, заменяем её на точку
-                    normalized = normalized.replace(',', '.');
-                }
-            }
-    
-            // Удаляем все символы кроме цифр, точки и минуса
-            normalized = normalized.replace(/[^\d.-]/g, '');
-    
-            const parsed = parseFloat(normalized);
-            return isNaN(parsed) ? 0 : parsed; // Возвращаем 0 вместо null для невалидных чисел
-        } catch (error) {
-            return 0; // Возвращаем 0 в случае ошибки
-        }
-    }
+    // Получаем базовые теги из AutoTagger
+    const autoTags = this.autoTagger.analyzeTags(data);
+    autoTags.forEach(tag => basicTags.add(tag));
 
-    checkCategories(value, tags) {
-        if (!value) return;
-        const strValue = value.toString().toLowerCase();
+    // Обрабатываем каждую строку показателей (начиная со второй строки)
+    let indicatorTags = new Set();
+    for (let i = 1; i < sheetData.length; i++) {
+      const row = sheetData[i];
+      if (!row || row.length < 2) continue;
 
+      const indicator = row[0];
+      for (let j = 1; j < row.length; j++) {
+        const value = this.parseNumeric(row[j]);
+        Object.values(this.businessRules).forEach(rule => {
+          if (rule.condition(indicator, value)) {
+            indicatorTags.add(rule.tag);
+          }
+        });
+
+        const indicatorStr = indicator.toString().toLowerCase();
         Object.entries(this.categories).forEach(([category, keywords]) => {
-            if (keywords.some(keyword => strValue.includes(keyword.toLowerCase()))) {
-                tags.add(category);
-            }
+          if (keywords.some(keyword => indicatorStr.includes(keyword.toLowerCase()))) {
+            indicatorTags.add(category);
+          }
         });
+      }
     }
 
-    calculateStatistics(data) {
-        const stats = {
-            totalRows: 0,
-            emptyValues: 0,
-            numericalColumns: new Set(),
-            categoricalColumns: new Set()
-        };
+    indicatorTags.forEach(tag => basicTags.add(tag));
 
-        if (!data.data || !Array.isArray(data.data)) {
-            return {
-                ...stats,
-                numericalColumns: [],
-                categoricalColumns: []
-            };
-        }
+    const metadata = {
+      tags: Array.from(basicTags)
+    };
 
-        stats.totalRows = data.data.length;
+    return {
+      ...data,
+      metadata: {
+        ...(data.metadata || {}),
+        tagging: metadata
+      }
+    };
+  }
 
-        // Используем предопределенные типы из метаданных
-        if (data.metadata?.columnTypes) {
-            Object.entries(data.metadata.columnTypes).forEach(([column, type]) => {
-                if (type === 'number') {
-                    stats.numericalColumns.add(column);
-                } else {
-                    stats.categoricalColumns.add(column);
-                }
-            });
-        }
-
-        // Подсчитываем пустые значения
-        data.data.forEach(row => {
-            if (!row.row) return;
-            for (let [_, value] of row.row) {
-                if (!value || value.toString().trim() === '') {
-                    stats.emptyValues++;
-                }
-            }
-        });
-
-        return {
-            ...stats,
-            numericalColumns: Array.from(stats.numericalColumns),
-            categoricalColumns: Array.from(stats.categoricalColumns)
-        };
+  // Приведение значения к числовому типу; если преобразование невозможно, возвращает 0.
+  parseNumeric(value) {
+    if (value === null || value === undefined || value === '') {
+      return 0;
     }
-
-    groupByCategories(tags) {
-        const groups = {
-            business: [],
-            technical: [],
-            content: [],
-            other: []
-        };
-
-        tags.forEach(tag => {
-            if (tag.startsWith('тип:') || tag.startsWith('формат:')) {
-                groups.technical.push(tag);
-            } else if (tag.includes('_')) {
-                groups.business.push(tag);
-            } else if (this.categories[tag]) {
-                groups.content.push(tag);
-            } else {
-                groups.other.push(tag);
-            }
-        });
-
-        return groups;
+    if (typeof value === 'number') {
+      return value;
     }
+    try {
+      let normalized = value.toString().trim().replace(/\s+/g, '');
+      normalized = normalized.replace(',', '.');
+      const parsed = parseFloat(normalized);
+      return isNaN(parsed) ? 0 : parsed;
+    } catch (error) {
+      return 0;
+    }
+  }
 }
 
 module.exports = TagAssigner;
+
