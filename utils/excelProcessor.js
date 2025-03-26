@@ -31,99 +31,122 @@ class ExcelProcessor {
     }
 
     // Получаем название компании и даты
-    const companyName = rawData[0][0];
+    const companyName = this.sanitizeValue(rawData[0][0]);
     const dates = rawData[0].slice(1).map(date => date.toString().trim());
-
-    // Получаем показатели и их значения
-    const data = [];
     const indicators = [];
+    const data = [];
+    const tags = new Set([companyName.toLowerCase()]);
 
+    // Определяем формат дат
+    const format = this.determineDateFormat(dates);
+
+    // Обработка строк с данными
     for (let i = 1; i < rawData.length; i++) {
-      const indicator = rawData[i][0];
+      const rowArray = rawData[i];
+      if (!rowArray) continue;
+
+      const indicator = this.sanitizeValue(rowArray[0]);
       if (!indicator) continue;
 
       indicators.push(indicator);
-      const values = new Map();
-      
-      // Собираем значения по датам
+      tags.add(indicator.toLowerCase());
+
+      // Создаем вложенные Map'ы как ожидают тесты
+      const rowMap = new Map();
+      const valuesMap = new Map();
+
       dates.forEach((date, j) => {
-        const value = this.sanitizeValue(rawData[i][j + 1]);
-        values.set(date, value);
+        let value = this.sanitizeValue(rowArray[j + 1]);
+        // Для числовых значений сохраняем как числа
+        if (typeof value === 'string' && /^-?\d+([.,]\d+)?$/.test(value)) {
+          value = parseFloat(value.replace(',', '.'));
+        }
+        valuesMap.set(date, value);
+        
+        // Добавляем теги для дат
+        if (date.includes('.')) {
+          const year = date.split('.').pop();
+          if (year.length === 4) tags.add(year);
+        } else {
+          tags.add(date);
+        }
       });
+
+      // Устанавливаем значения в row Map как ожидают тесты
+      rowMap.set('indicator', indicator);
+      rowMap.set('values', valuesMap);
 
       data.push({
         rowNumber: i,
-        label: indicator,
-        row: new Map([
-          ['indicator', indicator],
-          ['values', values]
-        ]),
-        tags: []
+        row: rowMap,  // Сохраняем структуру для тестов
+        indicator,    // Дублируем для MongoDB
+        values: valuesMap,  // Дублируем для MongoDB
+        tags: Array.from(tags)
       });
     }
 
-    // Генерируем теги
-    const tags = this.generateTags(companyName, indicators, dates, data);
-    data.forEach(item => {
-      item.tags = tags;
-    });
-
-    return {
+    const result = {
       companyName,
       dates,
       indicators,
       data,
       metadata: {
+        format,
         statistics: {
           rowCount: data.length,
-          columnCount: dates.length + 1,
+          columnCount: dates.length,
           processedAt: new Date()
         },
         tagging: {
-          tags,
-          tagCount: tags.length
+          tags: Array.from(tags),
+          tagCount: tags.size
         }
       },
-      sheetName,
-      totalRows: rawData.length,
-      totalColumns: dates.length + 1
+      sheetName
     };
+
+    return result;
   }
 
   static sanitizeValue(value) {
-    if (value === null || value === undefined || value === '') return '';
+    if (value === null || value === undefined) return '';
     
-    // Обработка числовых значений
-    if (typeof value === 'number') return value;
-    if (typeof value === 'string') {
-      // Проверка на процентное значение
-      if (value.endsWith('%')) return value;
-      // Проверка на число
-      if (/^-?\d+([.,]\d+)?$/.test(value)) {
-        return parseFloat(value.replace(',', '.'));
+    const str = value.toString().trim();
+    if (!str) return '';
+
+    return str;
+  }
+
+  static determineDateFormat(dates) {
+    if (!dates || !dates.length) return 'monthly'; // По умолчанию monthly
+    
+    const firstDate = dates[0].toString();
+    
+    // Для формата YYYY
+    if (/^\d{4}$/.test(firstDate)) {
+      return 'yearly';
+    }
+    
+    // Для формата MM.YYYY или DD.MM.YYYY
+    if (firstDate.includes('.')) {
+      const parts = firstDate.split('.');
+      // Если два компонента (MM.YYYY)
+      if (parts.length === 2) {
+        return 'monthly';
+      }
+      // Если три компонента (DD.MM.YYYY), но первый компонент всегда '01'
+      if (parts.length === 3 && parts[0] === '01') {
+        return 'monthly';
+      }
+      // Если три компонента и первый не '01'
+      if (parts.length === 3) {
+        return 'daily';
       }
     }
-    return value.toString();
-  }
-
-  static generateTags(companyName, indicators, dates, data) {
-    const tags = new Set([companyName.toLowerCase()]);
     
-    // Добавляем показатели
-    indicators.forEach(indicator => tags.add(indicator.toLowerCase()));
-    
-    // Добавляем годы из дат
-    dates.forEach(date => {
-      if (date.includes('.')) {
-        const year = date.split('.').pop();
-        if (year.length === 4) tags.add(year);
-      } else {
-        tags.add(date);
-      }
-    });
-
-    return Array.from(tags);
+    return 'monthly'; // По умолчанию используем monthly
   }
+    
 
   static createEmptyResult(sheetName) {
     return {
@@ -132,6 +155,7 @@ class ExcelProcessor {
       indicators: [],
       data: [],
       metadata: {
+        format: 'unknown',
         statistics: {
           rowCount: 0,
           columnCount: 0,
@@ -142,9 +166,7 @@ class ExcelProcessor {
           tagCount: 0
         }
       },
-      sheetName,
-      totalRows: 0,
-      totalColumns: 0
+      sheetName
     };
   }
 
@@ -153,5 +175,8 @@ class ExcelProcessor {
   }
 }
 
+// Экспортируем и класс, и его статические методы
 module.exports = ExcelProcessor;
+module.exports.parse = ExcelProcessor.parse;
+
 

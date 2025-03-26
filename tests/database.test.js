@@ -4,9 +4,10 @@ const { expect } = require('chai');
 const mongoose = require('mongoose');
 const { connectDB, disconnectDB } = require('../config/db');
 
-describe('Database Connection', () => {
-  before(async () => {
-    await connectDB();
+describe('Database Connection', function() {
+  before(function(done) {
+    this.timeout(30000);
+    connectDB().then(() => done()).catch(done);
   });
 
   it('should connect to MongoDB', () => {

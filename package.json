@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "NODE_ENV=test mocha 'tests/**/*.test.js' --exit",
-    "test:integration": "NODE_ENV=test mocha 'tests/integration/**/*.test.js' --exit",
+    "test": "NODE_ENV=test mocha --timeout 30000 'tests/**/*.test.js' --exit",
+    "test:integration": "NODE_ENV=test mocha --timeout 30000 'tests/integration/**/*.test.js' --exit",
     "start": "node server.js"
   },
   "keywords": [],
