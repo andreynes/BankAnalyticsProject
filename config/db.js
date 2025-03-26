@@ -1,6 +1,4 @@
-// config/db.js
 const mongoose = require('mongoose');
-require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
 const connectDB = async () => {
   try {
@@ -8,14 +6,25 @@ const connectDB = async () => {
       useNewUrlParser: true,
       useUnifiedTopology: true
     });
-    console.log(`MongoDB connected: ${conn.connection.host}`);
-    return conn;
+    console.log('MongoDB connected:', conn.connection.host);
   } catch (error) {
-    console.error('Ошибка подключения к MongoDB:', error);
+    console.error('MongoDB connection error:', error);
     process.exit(1);
   }
 };
 
-module.exports = connectDB;
+const disconnectDB = async () => {
+  try {
+    await mongoose.disconnect();
+    console.log('MongoDB disconnected');
+  } catch (error) {
+    console.error('MongoDB disconnection error:', error);
+  }
+};
+
+module.exports = {
+  connectDB,
+  disconnectDB
+};
 
 

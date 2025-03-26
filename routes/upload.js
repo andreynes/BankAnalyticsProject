@@ -1,87 +1,46 @@
-'use strict';
-
 const express = require('express');
-const multer  = require('multer');
-const path = require('path');
 const router = express.Router();
-
-// Импорт утилиты для обработки Excel и модели данных
+const multer = require('multer');
 const ExcelProcessor = require('../utils/excelProcessor');
 const Data = require('../models/Data');
 
-// Настройка хранилища для multer – файлы будут сохраняться в папке "uploads"
-// Убедитесь, что папка uploads существует в корневой директории проекта
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, path.join(__dirname, '../uploads'));
-  },
-  filename: function (req, file, cb) {
-    // Формирование уникального имени: текущее время + оригинальное имя файла
-    const uniqueName = Date.now() + '-' + file.originalname;
-    cb(null, uniqueName);
-  }
+  destination: (req, file, cb) => cb(null, 'uploads/'),
+  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
 });
+
 const upload = multer({ storage: storage });
 
-// Обработчик для загрузки файла (POST-запрос на /upload)
 router.post('/', upload.single('file'), async (req, res) => {
   try {
-    // Проверяем, что файл прикреплён
     if (!req.file) {
-      return res.status(400).json({ error: 'Файл не был прикреплен' });
-    }
-    console.log('Получен файл:', req.file);
-
-    // Обработка Excel-файла через ExcelProcessor
-    // Опция removeHeaderRow: true – если первая строка является заголовками, она исключается из данных
-    const result = await ExcelProcessor.processFile(req.file.path, { removeHeaderRow: true });
-    console.log('Результат обработки:', result);
-
-    // Получаем теги из результата автотегирования
-    // Если автотегирование не возвращает теги, устанавливаем дефолтный массив (например, тестовые теги)
-    let tags = result.metadata.tagging && result.metadata.tagging.tags;
-    if (!Array.isArray(tags) || tags.length === 0) {
-      console.log("AutoTagger не сгенерировал теги, устанавливаем дефолтные");
-      tags = ['default-tag'];
+      return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    // Создаем документ для сохранения
-    const dataDocument = new Data({
+    const result = await ExcelProcessor.processFile(req.file.path);
+    
+    const dataModel = new Data({
       fileName: req.file.originalname,
       uploadDate: new Date(),
+      companyName: result.companyName,
+      dates: result.dates,
+      indicators: result.indicators,
       data: result.data,
-      tags: tags,
-      metadata: {
-        sheetName: result.sheetName,
-        totalRows: result.totalRows,
-        totalColumns: result.totalColumns,
-        processedAt: new Date(),
-        fileSize: req.file.size,
-        statistics: result.metadata.statistics || { 
-          emptyValues: 0, 
-          numericalColumns: ['Сумма продажи'], 
-          categoricalColumns: [], 
-          uniqueValuesCount: {} 
-        }
-      },
-      status: 'processed',
-      lastModified: new Date()
+      metadata: result.metadata,
+      tags: result.metadata.tagging.tags
     });
 
-    console.log("Сохраняем документ в базе...");
-    await dataDocument.save();
-    console.log("Документ сохранен:", dataDocument);
+    const savedData = await dataModel.save();
 
     res.status(200).json({
-      message: 'Файл получен, обработан и данные сохранены',
-      data: dataDocument
+      message: 'File processed successfully',
+      data: savedData
     });
   } catch (error) {
-    console.error('Ошибка при обработке Excel файла:', error);
+    console.error('Error processing Excel file:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 module.exports = router;
-
 

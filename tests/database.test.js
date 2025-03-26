@@ -1,22 +1,37 @@
-// tests/database.test.js
-require('dotenv').config();
-const mongoose = require('mongoose');
+"use strict";
+
 const { expect } = require('chai');
-const connectDB = require('../config/db');
+const mongoose = require('mongoose');
+const { connectDB, disconnectDB } = require('../config/db');
 
 describe('Database Connection', () => {
-  before(async function() {
-    this.timeout(10000); // увеличиваем таймаут, если требуется
+  before(async () => {
     await connectDB();
-  });
-
-  after(async () => {
-    await mongoose.disconnect();
   });
 
   it('should connect to MongoDB', () => {
     expect(mongoose.connection.readyState).to.equal(1);
   });
-});
 
+  it('should use test database', () => {
+    expect(mongoose.connection.name).to.equal('bankanalytics');
+  });
+
+  it('should handle multiple connections', async () => {
+    // Пробуем подключиться повторно
+    await connectDB();
+    expect(mongoose.connection.readyState).to.equal(1);
+  });
+
+  it('should handle disconnection', async () => {
+    await disconnectDB();
+    expect(mongoose.connection.readyState).to.equal(0);
+    // Восстанавливаем подключение для следующих тестов
+    await connectDB();
+  });
+
+  after(async () => {
+    await disconnectDB();
+  });
+});
 

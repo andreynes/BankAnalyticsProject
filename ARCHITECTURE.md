@@ -20,12 +20,17 @@ backend/
 │   └── Data.js
 ├── node_modules/
 │   └── ...
+├── optimal-tagging-strategy.txt
 ├── package-lock.json
 ├── package.json
 ├── routes/
 │   ├── search.js
 │   └── upload.js
+├── sample.xlsx
 ├── server.js
+├── test-autoTagger.js
+├── test-sanitize.js
+├── test-tagAssigner.js
 ├── tests/
 │   ├── autoTagger.test.js
 │   ├── data.model.test.js
@@ -48,7 +53,7 @@ backend/
 │       └── createTestFile.js
 ├── updateArchitecture.py
 ├── uploads/
-│   └── 1742900725867-Полипласт_данные.xlsx
+│   └── 1742977335596-sample.xlsx
 └── utils/
     ├── autoTagger.js
     ├── excelFormatHandler.js
@@ -61,12 +66,20 @@ backend/
 ### Папка: .
 Содержимые файлы:
 - ARCHITECTURE.md
+- optimal-tagging-strategy.txt
 - package-lock.json
 - package.json
+- sample.xlsx
 - server.js
+- test-autoTagger.js
+- test-sanitize.js
+- test-tagAssigner.js
 - updateArchitecture.py
 
 **Детали по файлам:**
+- **Файл**: test-tagAssigner.js (язык: js)
+  - File_imports: **test-tagAssigner.js**
+    - *Импорты:* ./utils/tagAssigner
 - **Файл**: updateArchitecture.py (язык: python)
   - File_comment: **updateArchitecture.py**
     - *Описание:* !/usr/bin/env python3 -*- coding: utf-8 -*-
@@ -87,9 +100,14 @@ backend/
     - *Описание:* Обновляет файл ARCHITECTURE.md, вставляя сгенерированный контент между маркерами. Если маркеры отсутствуют, они добавляются в конец файла.
   - File_imports: **updateArchitecture.py**
     - *Импорты:* re
+- **Файл**: test-sanitize.js (язык: js)
+  - Function: **sanitize**
 - **Файл**: server.js (язык: js)
   - File_imports: **server.js**
-    - *Импорты:* ./routes/upload, ./config/db, ./routes/search
+    - *Импорты:* ./routes/search, ./config/db, ./routes/upload
+- **Файл**: test-autoTagger.js (язык: js)
+  - File_imports: **test-autoTagger.js**
+    - *Импорты:* ./utils/autoTagger
 
 ### Папка: add-in
 Содержимые файлы:
@@ -104,25 +122,27 @@ backend/
 **Детали по файлам:**
 - **Файл**: taskpane.js (язык: js)
   - Function: **onSearch**
-    - *Описание:* SVG-иконки (копирование и зеленая галочка) в стиле Jay Copilot Данные выручки по годам Данные чистой прибыли по годам (значения из требования)
+    - *Описание:* SVG-иконки (копирование и зеленая галочка) в стиле Jay Copilot Новая иконка для графика (можно заменить на любую понравившуюся) Данные выручки по годам Данные чистой прибыли по годам
   - Function: **showRevenueYear**
     - *Описание:* Отображение выручки за конкретный год с кнопкой копирования (индивидуальный результат – plain text)
   - Function: **showRevenueTable**
     - *Описание:* Отображение таблицы с выручкой по всем годам (команда "полипласт выручка")
   - Function: **showNetProfitTable**
-    - *Описание:* Назначаем обработчики для копирования отдельных строк (plain text) Обработчик глобальной кнопки копирования таблицы – копирование таблицы в формате HTML без колонки "Копировать" Отображение таблицы с чистой прибылью по всем годам (команда "полипласт чистая прибыль")
+    - *Описание:* Обработчики для копирования отдельного числа Обработчик для копирования таблицы (HTML без колонки "Копировать") Обработчик для копирования графика Отображение таблицы с чистой прибылью по годам (команда "полипласт чистая прибыль")
   - Function: **showCompanyIndicators**
     - *Описание:* Отображение комбинированной таблицы с показателями (команда "полипласт")
+  - Function: **copyChart**
+    - *Описание:* Функция копирования графика. Создает canvas, рисует диаграмму и копирует изображение.
   - Function: **showResult**
-    - *Описание:* Вставка HTML результата в контейнер #result
+    - *Описание:* Дополнительные показатели можно добавить по аналогии Создаем canvas для рисования графика Заливка фона белым цветом Параметры графика Отрисовка заголовка графика Отрисовка столбцов и подписей Столбец Подпись года Преобразование canvas в изображение (Blob) и копирование в буфер обмена Функция вывода HTML-контента в элемент с id "result"
   - Function: **copyWithFeedback**
-    - *Описание:* Функция копирования с обратной связью Если isHtml === true, копируем HTML (с обоими форматами), иначе – просто текст.
+    - *Описание:* Функция копирования с обратной связью (для текста или HTML)
   - Function: **showFeedback**
-    - *Описание:* Отображение обратной связи – замена содержимого кнопки на галочку с текстом "Скопировано"
+    - *Описание:* Функция отображения обратной связи, заменяет содержимое кнопки на галочку с текстом "Скопировано"
   - Function: **copyTableHtml**
-    - *Описание:* Функция копирования HTML таблицы без столбца "Копировать"
+    - *Описание:* Функция копирования HTML таблицы без колонки "Копировать"
   - Function: **formatNumber**
-    - *Описание:* Клонируем таблицу Удаляем последний столбец из заголовка Удаляем последний столбец из каждой строки tbody Функция форматирования числа – добавление разделителей
+    - *Описание:* Функция форматирования числа (добавление пробелов-разделителей)
 - **Файл**: taskpane.html (язык: html)
   - Html: **taskpane.html**
     - *Описание:* HTML файл
@@ -170,7 +190,7 @@ backend/
 **Детали по файлам:**
 - **Файл**: data.model.test.js (язык: js)
   - File_imports: **data.model.test.js**
-    - *Импорты:* ../config/db, ../models/Data
+    - *Импорты:* ../models/Data, ../config/db
 - **Файл**: excelReader.test.js (язык: js)
   - File_imports: **excelReader.test.js**
     - *Импорты:* ../utils/excelReader
@@ -220,7 +240,7 @@ backend/
     - *Импорты:* ../../utils/excelProcessor
 - **Файл**: upload.integration.test.js (язык: js)
   - File_imports: **upload.integration.test.js**
-    - *Импорты:* ../../config/db, ../../server
+    - *Импорты:* ../../server, ../../config/db
 - **Файл**: fileProcessing.test.js (язык: js)
   - File_imports: **fileProcessing.test.js**
     - *Импорты:* ../../utils/excelProcessor
@@ -239,7 +259,7 @@ backend/
 
 ### Папка: uploads
 Содержимые файлы:
-- 1742900725867-Полипласт_данные.xlsx
+- 1742977335596-sample.xlsx
 
 ### Папка: utils
 Содержимые файлы:
@@ -269,18 +289,17 @@ backend/
     - *Метод:* analyzeContent
     - *Метод:* cleanup
 - **Файл**: excelParser.js (язык: js)
-  - Class: **ExcelParser**
-  - File_imports: **excelParser.js**
-    - *Импорты:* ./excelProcessor
+  - Function: **sanitize**
+    - *Описание:* Функция очистки ячейки (sanitize)
+  - Class: **ExcelProcessor**
+    - *Описание:* Если значение уже число, форматируем с двумя знаками после запятой Если все символы одинаковы (без учета регистра), вернуть пустую строку Если строка состоит только из специальных символов, например "!@#$%^&*()" Если строка выглядит как число, форматируем его
+    - *Поля:* rawData, rawData
 - **Файл**: tagAssigner.js (язык: js)
   - Class: **TagAssigner**
-    - *Поля:* normalized, normalized, normalized
+    - *Поля:* normalized
     - *Метод:* constructor
     - *Метод:* assignTags
-    - *Метод:* parseAmount
-    - *Метод:* checkCategories
-    - *Метод:* calculateStatistics
-    - *Метод:* groupByCategories
+    - *Метод:* parseNumeric
   - File_imports: **tagAssigner.js**
     - *Импорты:* ./autoTagger
 

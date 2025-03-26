@@ -1,44 +1,42 @@
-'use strict';
-
-const path = require('path');
 const express = require('express');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
-console.log("MONGO_URI:", process.env.MONGO_URI);
-
-const app = express();
-
-// Подключаем middleware для отдачи статических файлов из папки add-in/src
-app.use(express.static(path.join(__dirname, 'add-in', 'src')));
-
-// Middleware для парсинга JSON и urlencoded данных
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Подключаем модуль подключения к базе данных
-const connectDB = require('./config/db');
-// Вызываем подключение к БД
-connectDB();
-
-// Подключаем маршруты
+const dotenv = require('dotenv');
+const { connectDB } = require('./config/db');
 const uploadRouter = require('./routes/upload');
 const searchRouter = require('./routes/search');
 
-app.use('/upload', uploadRouter);
-app.use('/search', searchRouter);
+// Загрузка конфигурации из .env
+dotenv.config();
 
-// Базовый маршрут для проверки работы сервера
-app.get('/', (req, res) => {
-    res.send('Сервер работает');
+// Создание экземпляра приложения
+const app = express();
+
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Подключение к базе данных
+if (process.env.NODE_ENV !== 'test') {
+  connectDB();
+}
+
+// Роуты
+app.use('/api/upload', uploadRouter);
+app.use('/api/search', searchRouter);
+
+// Обработка ошибок
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: err.message });
 });
 
 const PORT = process.env.PORT || 3000;
+
 if (process.env.NODE_ENV !== 'test') {
-    app.listen(PORT, () => {
-        console.log(`Сервер запущен на порту ${PORT}`);
-    });
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
 }
 
 module.exports = app;
-
 
 
