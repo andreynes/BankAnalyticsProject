@@ -1,17 +1,35 @@
 <!DOCTYPE html>
-<html lang="ru">
-  <head>
-    <meta charset="utf-8" />
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
     <title>PowerPoint Add-in</title>
-    <link rel="stylesheet" href="taskpane.css" />
-  </head>
-  <body>
-    <div id="content">
-      <input type="text" id="queryInput" placeholder="Введите запрос" />
-      <button id="searchButton">Поиск</button>
+
+    <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js"></script>
+    <link href="taskpane.css" rel="stylesheet" type="text/css" />
+</head>
+
+<body>
+    <div class="container">
+        <div class="search-container">
+            <input type="text" id="queryInput" placeholder="Введите запрос (например: 'газпром выручка')" />
+            <button id="searchButton">Поиск</button>
+        </div>
+        
+        <div id="result"></div>
+
+        <div class="help-text">
+            <h3>Примеры запросов:</h3>
+            <ul>
+                <li>"газпром выручка 2024" - выручка за конкретный год</li>
+                <li>"газпром выручка" - таблица выручки по годам</li>
+                <li>"газпром прибыль" - таблица прибыли по годам</li>
+                <li>"газпром" - все показатели</li>
+            </ul>
+        </div>
     </div>
-    <div id="result"></div>
-    <script src="taskpane.js"></script>
-  </body>
+    <script type="text/javascript" src="taskpane.js"></script>
+</body>
 </html>
+
 

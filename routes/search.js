@@ -2,37 +2,42 @@ const express = require('express');
 const router = express.Router();
 const Data = require('../models/Data');
 
-// Поиск по компании
-router.get('/company/:name', async (req, res) => {
-  try {
-    const data = await Data.find({ companyName: new RegExp(req.params.name, 'i') });
-    res.json(data);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+router.get('/', async (req, res) => {
+    try {
+        const query = req.query.q.toLowerCase();
+        console.log('Search query:', query);
 
-// Поиск по тегам
-router.get('/tags', async (req, res) => {
-  try {
-    const tags = req.query.tags.split(',');
-    const data = await Data.find({ tags: { $all: tags } });
-    res.json(data);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+        // Расширенные критерии поиска
+        const searchCriteria = {
+            $or: [
+                { companyName: { $regex: query, $options: 'i' } },
+                { 'data.indicator': { $regex: query, $options: 'i' } },
+                { tags: { $regex: query, $options: 'i' } }
+            ]
+        };
 
-// Поиск по показателю
-router.get('/indicator/:name', async (req, res) => {
-  try {
-    const data = await Data.find({ indicators: new RegExp(req.params.name, 'i') });
-    res.json(data);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+        console.log('Search criteria:', JSON.stringify(searchCriteria, null, 2));
+
+        const data = await Data.find(searchCriteria);
+        console.log('Found documents:', data.length);
+
+        if (!data || data.length === 0) {
+            return res.status(404).json({ 
+                error: 'Data not found',
+                query: query,
+                searchCriteria: searchCriteria
+            });
+        }
+
+        res.json(data);
+    } catch (error) {
+        console.error('Search error:', error);
+        res.status(500).json({ 
+            error: error.message,
+            query: req.query.q 
+        });
+    }
 });
 
 module.exports = router;
-
 
