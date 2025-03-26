@@ -6,20 +6,18 @@ class TagAssigner {
   constructor() {
     this.autoTagger = new AutoTagger();
 
-    // Бизнес-правила для присвоения тегов, зависят от показателя и его значений
+    // Бизнес-правила на основе финансовых порогов.
     this.businessRules = {
       highRevenue: {
-        // Если показатель содержит "выручка" или "revenue" и значение больше 1 млн
         condition: (indicator, value) => {
           if (/выручка|revenue/i.test(indicator)) {
             return value > 1000000;
           }
           return false;
         },
-        tag: 'крупная_выручка'
+        tag: 'высокая_выручка'
       },
       highProfit: {
-        // Если показатель содержит "прибыль" или "profit" и значение больше 500 тыс.
         condition: (indicator, value) => {
           if (/прибыль|profit/i.test(indicator)) {
             return value > 500000;
@@ -29,96 +27,120 @@ class TagAssigner {
         tag: 'крупная_прибыль'
       },
       negativeValue: {
-        // Если значение отрицательное
         condition: (indicator, value) => {
           return value < 0;
         },
-        tag: 'отрицательное_значение'
+        tag: 'отрицательная_прибыль'
       },
       emptyData: {
-        // Если значение пустое или не задано
         condition: (indicator, value) => {
           return value === null || value === undefined || value === '';
         },
-        tag: 'пустые_данные'
+        tag: 'неполные_данные'
       }
     };
 
-    // Категории для группировки тегов (расширяем по необходимости)
+    // Категории для группировки тегов.
     this.categories = {
       'финансы': ['выручка', 'прибыль', 'ebitda'],
       'результаты': ['рост', 'снижение']
     };
   }
 
-  /*
-   Метод assignTags ожидает объект data со структурой:
-   {
-     sheetData: [
-       [ companyName, date1, date2, ... ],
-       [ indicator1, value11, value12, ... ],
-       [ indicator2, value21, value22, ... ],
-       ...
-     ],
-     metadata: { ... }
-   }
-   
-   Процесс:
-   - Извлекает название компании из первой ячейки заголовка и добавляет его как тег.
-   - Вызывает AutoTagger для получения базовых тегов.
-   - Для каждой строки (начиная со второй) рассматривает значение показателя (первый элемент строки)
-     и его числовые значения (остальные элементы), применяет бизнес-правила и категории.
-   - Объединяет все теги и добавляет их в data.metadata.tagging.
-   
-   Возвращает обновленный объект data.
-  */
+  /**
+   * Метод assignTags принимает объект data и обрабатывает его.
+   * Добавлены проверки и логирование пустых данных для диагностики.
+   */
   assignTags(data) {
-    const sheetData = data.sheetData;
-    if (!sheetData || sheetData.length < 2) {
+    // Проверяем наличие входного объекта и sheetData.
+    if (!data) {
+      console.error("assignTags: входной объект data отсутствует.");
       return data;
     }
+    if (!data.sheetData || !Array.isArray(data.sheetData) || data.sheetData.length === 0) {
+      console.error("assignTags: sheetData отсутствует или пустое:", data.sheetData);
+      return data;
+    }
+    if (!Array.isArray(data.sheetData[0])) {
+      console.error("assignTags: заголовок (первый элемент sheetData) не является массивом:", data.sheetData[0]);
+      return data;
+    }
+    
+    console.log("assignTags – исходные данные:", JSON.stringify(data.sheetData, null, 2));
 
-    const headerRow = sheetData[0];
-    const companyName = headerRow[0];
+    // Если sheetData имеет формат Map (data.data), восстанавливаем его
+    if ((!data.sheetData || !Array.isArray(data.sheetData)) &&
+        data.data &&
+        data.data.length > 0 &&
+        data.data[0].row &&
+        typeof data.data[0].row.get === "function") {
+      let reconstructed = [];
+      const headers = Array.from(data.data[0].row.keys());
+      reconstructed.push(headers);
+      data.data.forEach(item => {
+        let row = [];
+        headers.forEach(header => {
+          row.push(item.row.get(header) || "");
+        });
+        reconstructed.push(row);
+      });
+      data.sheetData = reconstructed;
+      console.log("Reconstructed sheetData:", JSON.stringify(data.sheetData, null, 2));
+    }
+    
+    // Преобразуем sheetData в массив rows
+    const header = data.sheetData[0];
+    let rows = [];
+    for (let i = 1; i < data.sheetData.length; i++) {
+      let row = data.sheetData[i];
+      if (!Array.isArray(row) || row.length === 0) {
+        console.warn(`assignTags: пропускается пустая строка на позиции ${i}`);
+        continue;
+      }
+      if (row[0] === undefined) {
+        console.warn(`assignTags: пропускается строка без label на позиции ${i}`);
+        continue;
+      }
+      rows.push({ label: row[0], values: row.slice(1) });
+    }
+    console.log("assignTags – сформированные rows:", JSON.stringify(rows, null, 2));
+
     let basicTags = new Set();
-
-    if (companyName) {
-      basicTags.add(companyName.toString().toLowerCase().replace(/\s+/g, '_'));
+    // Добавляем название компании из заголовка, если имеется
+    if (data.sheetData[0] && data.sheetData[0][0]) {
+      basicTags.add(data.sheetData[0][0].toString().toLowerCase().replace(/\s+/g, '_'));
     }
 
-    // Получаем базовые теги из AutoTagger
-    const autoTags = this.autoTagger.analyzeTags(data);
+    // Получаем базовые теги от AutoTagger
+    const autoTags = this.autoTagger.analyzeTags({ rows: rows });
+    console.log("assignTags – AutoTagger вернул теги:", JSON.stringify(autoTags, null, 2));
     autoTags.forEach(tag => basicTags.add(tag));
 
-    // Обрабатываем каждую строку показателей (начиная со второй строки)
     let indicatorTags = new Set();
-    for (let i = 1; i < sheetData.length; i++) {
-      const row = sheetData[i];
-      if (!row || row.length < 2) continue;
-
-      const indicator = row[0];
-      for (let j = 1; j < row.length; j++) {
-        const value = this.parseNumeric(row[j]);
+    for (let row of rows) {
+      if (!row || !row.label || !Array.isArray(row.values)) continue;
+      for (let val of row.values) {
+        let numericVal = this.parseNumeric(val);
         Object.values(this.businessRules).forEach(rule => {
-          if (rule.condition(indicator, value)) {
+          if (rule.condition(row.label, numericVal)) {
             indicatorTags.add(rule.tag);
           }
         });
-
-        const indicatorStr = indicator.toString().toLowerCase();
-        Object.entries(this.categories).forEach(([category, keywords]) => {
-          if (keywords.some(keyword => indicatorStr.includes(keyword.toLowerCase()))) {
-            indicatorTags.add(category);
-          }
-        });
       }
+      const indicatorStr = row.label.toString().toLowerCase();
+      Object.entries(this.categories).forEach(([category, keywords]) => {
+        if (keywords.some(keyword => indicatorStr.includes(keyword.toLowerCase()))) {
+          indicatorTags.add(category);
+        }
+      });
     }
-
     indicatorTags.forEach(tag => basicTags.add(tag));
 
     const metadata = {
       tags: Array.from(basicTags)
     };
+
+    console.log("assignTags – итоговые теги:", JSON.stringify(metadata.tags, null, 2));
 
     return {
       ...data,
@@ -129,7 +151,7 @@ class TagAssigner {
     };
   }
 
-  // Приведение значения к числовому типу; если преобразование невозможно, возвращает 0.
+  // Преобразует значение в число; если не удается, возвращает 0.
   parseNumeric(value) {
     if (value === null || value === undefined || value === '') {
       return 0;
@@ -149,4 +171,5 @@ class TagAssigner {
 }
 
 module.exports = TagAssigner;
+
 
