@@ -1,21 +1,23 @@
+// config/db.js
+
 const mongoose = require('mongoose');
 require('dotenv').config();
 
 const connectDB = async () => {
   try {
-    if (!process.env.MONGO_URI) {
-      throw new Error('MONGO_URI is not defined in environment variables');
+    if (!process.env.MONGODB_URI) {
+      throw new Error('MONGODB_URI is not defined in environment variables');
     }
-    
-    const conn = await mongoose.connect(process.env.MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
+
+    const conn = await mongoose.connect(process.env.MONGODB_URI, {
+      dbName: process.env.NODE_ENV === 'test' ? 'testdb' : 'bankanalytics'
     });
     
-    console.log('MongoDB connected:', conn.connection.host);
+    console.log(`MongoDB connected: ${conn.connection.host}`);
+    return conn;
   } catch (error) {
-    console.error('MongoDB connection error:', error);
-    process.exit(1);
+    console.error(`Error connecting to MongoDB: ${error.message}`);
+    throw error; // Пробрасываем ошибку дальше
   }
 };
 
@@ -24,10 +26,14 @@ const disconnectDB = async () => {
     await mongoose.disconnect();
     console.log('MongoDB disconnected');
   } catch (error) {
-    console.error('MongoDB disconnection error:', error);
+    console.error(`Error disconnecting from MongoDB: ${error.message}`);
+    throw error;
   }
 };
 
-module.exports = { connectDB, disconnectDB };
+module.exports = {
+  connect: connectDB,
+  disconnect: disconnectDB
+};
 
 

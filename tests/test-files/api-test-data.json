@@ -1,0 +1,14 @@
+{
+  "company": "Test Company",
+  "year": 2023,
+  "metrics": [
+    {
+      "name": "Revenue",
+      "value": 1000000
+    },
+    {
+      "name": "Profit",
+      "value": 300000
+    }
+  ]
+}

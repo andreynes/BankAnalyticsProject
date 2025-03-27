@@ -1,5 +1,63 @@
 const mongoose = require('mongoose');
 
+
+// Схема для структуры заголовков (многоуровневые заголовки)
+const HeaderSchema = new mongoose.Schema({
+  value: String,
+  level: Number,
+  parent: String,
+  children: [String]
+}, { _id: false });
+
+
+// Схема для значений в ячейках
+const CellValueSchema = new mongoose.Schema({
+  value: mongoose.Schema.Types.Mixed,
+  format: String, // number, text, date, etc.
+  metadata: Map
+}, { _id: false });
+
+
+// Схема для блока данных (таблица или текст)
+const DataBlockSchema = new mongoose.Schema({
+  blockId: String,
+  type: {
+    type: String,
+    enum: ['table', 'text', 'api'],
+    required: true
+  },
+  source: {
+    type: {
+      type: String,
+      enum: ['excel', 'word', 'api'],
+      required: true
+    },
+    details: Map // Дополнительная информация об источнике
+  },
+  content: {
+    // Для текстового блока
+    text: String,
+    
+    // Для табличного блока
+    headers: [HeaderSchema],
+    rows: [{
+      rowNumber: Number,
+      cells: Map, // Ключ - id колонки, значение - CellValueSchema
+      metadata: Map
+    }],
+    
+    // Для API блока
+    apiData: Map
+  },
+  structure: {
+    levels: Number, // Количество уровней в структуре
+    hierarchyMap: Map // Карта связей между уровнями
+  },
+  tags: [String] // Теги для конкретного блока
+}, { _id: false });
+
+
+// Основная схема документа
 const DataSchema = new mongoose.Schema({
   fileName: {
     type: String,
@@ -13,48 +71,37 @@ const DataSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  dates: [{
+  documentType: {
     type: String,
+    enum: ['excel', 'word', 'api'],
     required: true
-  }],
-  indicators: [{
-    type: String,
-    required: true
-  }],
-  data: [{
-    rowNumber: Number,
-    label: String,
-    indicator: String,
-    values: {
-      type: Object,
-      required: true
-    },
-    tags: [String]
-  }],
+  },
+  globalTags: [String], // Общие теги для всего документа
+  blocks: [DataBlockSchema], // Массив блоков данных
   metadata: {
     format: {
       type: String,
       enum: ['yearly', 'monthly', 'daily', 'unknown'],
-      default: 'monthly' // Изменено на monthly по умолчанию
+      default: 'monthly'
     },
     statistics: {
-      rowCount: Number,
-      columnCount: Number,
+      totalBlocks: Number,
+      totalRows: Number,
       processedAt: Date,
       fileSize: Number
     },
-    tagging: {
-      tags: [String],
-      tagCount: Number
+    source: {
+      type: String,
+      details: Map // Дополнительные детали источника
     }
   },
-  tags: [String],
   status: {
     type: String,
     enum: ['processing', 'completed', 'error'],
-    default: 'completed'
+    default: 'processing'
   }
 });
+
 
 // Функция определения формата даты
 function determineDateFormat(dateStr) {
@@ -68,34 +115,64 @@ function determineDateFormat(dateStr) {
   // Для формата MM.YYYY или DD.MM.YYYY
   if (dateStr.includes('.')) {
     const parts = dateStr.split('.');
-    // Если два компонента (MM.YYYY)
-    if (parts.length === 2) {
-      return 'monthly';
-    }
-    // Если три компонента (DD.MM.YYYY), но первый компонент всегда '01'
-    if (parts.length === 3 && parts[0] === '01') {
-      return 'monthly';
-    }
-    // Если три компонента и первый не '01'
-    if (parts.length === 3) {
-      return 'daily';
-    }
+    if (parts.length === 2) return 'monthly';
+    if (parts.length === 3 && parts[0] === '01') return 'monthly';
+    if (parts.length === 3) return 'daily';
   }
   
-  return 'monthly'; // По умолчанию используем monthly
+  return 'monthly';
 }
 
-// Middleware для автоматического определения формата дат
+
+// Middleware для предварительной обработки
 DataSchema.pre('save', function(next) {
-    if (!this.metadata) {
-      this.metadata = {};
-    }
-    if (!this.metadata.format) {
-        this.metadata.format = 'monthly';
+  // Инициализация metadata если отсутствует
+  if (!this.metadata) {
+    this.metadata = {};
   }
+  
+  // Подсчет статистики
+  this.metadata.statistics = {
+    totalBlocks: this.blocks.length,
+    totalRows: this.blocks.reduce((acc, block) => {
+      return acc + (block.type === 'table' ? block.content.rows.length : 0);
+    }, 0),
+    processedAt: new Date(),
+    fileSize: this.metadata.statistics?.fileSize || 0
+  };
+  
   next();
 });
 
+
+// Методы для работы с тегами
+DataSchema.methods.addGlobalTag = function(tag) {
+  if (!this.globalTags.includes(tag)) {
+    this.globalTags.push(tag);
+  }
+};
+
+
+DataSchema.methods.addBlockTag = function(blockId, tag) {
+  const block = this.blocks.find(b => b.blockId === blockId);
+  if (block && !block.tags.includes(tag)) {
+    block.tags.push(tag);
+  }
+};
+
+
+// Статические методы для поиска
+DataSchema.statics.findByTags = function(tags) {
+  return this.find({
+    $or: [
+      { globalTags: { $all: tags } },
+      { 'blocks.tags': { $all: tags } }
+    ]
+  });
+};
+
+
 module.exports = mongoose.model('Data', DataSchema);
+
 
 

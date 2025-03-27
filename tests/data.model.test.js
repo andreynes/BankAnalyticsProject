@@ -1,84 +1,123 @@
-"use strict";
+// tests/data.model.test.js
 
-const { expect } = require('chai');
-const mongoose = require('mongoose');
+
 const Data = require('../models/Data');
-const { connectDB, disconnectDB } = require('../config/db');
+const db = require('../config/db');
+const { expect } = require('chai');
 
-describe('Data Model Test', function() {
-  before(async function() {
-    this.timeout(30000);
-    await connectDB();
+
+describe('Data Model Test', () => {
+    before(async function() {
+      if (!process.env.MONGODB_URI) {
+        console.log('Skipping database tests - no MongoDB URI provided');
+        this.skip();
+      }
+      try {
+        await db.connect();
+      } catch (error) {
+        console.log('Failed to connect to MongoDB:', error.message);
+        this.skip();
+      }
+    });
+  
+
+
+  after(async function ()  {
+    try {
+        await Data.deleteMany({});
+        await db.disconnect();
+    }   catch (error) {
+        console.warn('Warning: Error during cleanup:', error.message);
+    }
   });
 
-  it('should validate valid data', async function() {
-    const validData = new Data({
+
+  beforeEach(async () => {
+    await Data.deleteMany({});
+  });
+
+
+  it('should validate valid data', async () => {
+    const validData = {
       fileName: 'test.xlsx',
-      uploadDate: new Date(),
-      companyName: 'Тестовая компания',
-      dates: ['2020', '2021', '2022'],
-      indicators: ['Выручка', 'EBITDA'],
+      documentType: 'excel',
+      companyName: 'Test Company',
+      dates: ['2023', '2024'],
+      indicators: ['Revenue', 'Profit'],
       data: [{
         rowNumber: 1,
-        label: 'Выручка',
-        indicator: 'Выручка',
+        indicator: 'Revenue',
         values: {
-          '2020': 1000.50,
-          '2021': 2000.75,
-          '2022': 3000.25
+          '2023': 1000000,
+          '2024': 1200000
         },
-        tags: ['выручка', '2020', '2021', '2022']
+        tags: ['revenue', '2023', '2024']
       }],
       metadata: {
         format: 'yearly',
         statistics: {
           rowCount: 1,
-          columnCount: 3,
-          processedAt: new Date()
+          columnCount: 2,
+          processedAt: new Date(),
+          fileSize: 1024
         },
         tagging: {
-          tags: ['выручка', '2020', '2021', '2022'],
-          tagCount: 4
+          tags: ['revenue', '2023', '2024'],
+          tagCount: 3
         }
       },
-      tags: ['выручка', '2020', '2021', '2022'],
+      tags: ['revenue', '2023', '2024'],
       status: 'completed'
-    });
+    };
 
-    const savedData = await validData.save();
+
+    const data = new Data(validData);
+    const savedData = await data.save();
+    
+    expect(savedData._id).to.exist;
+    expect(savedData.fileName).to.equal('test.xlsx');
+    expect(savedData.companyName).to.equal('Test Company');
+    expect(savedData.documentType).to.equal('excel');
     expect(savedData.status).to.equal('completed');
   });
 
-  it('should fail for invalid data', async function() {
-    const invalidData = new Data({
-      fileName: 'test.xlsx'
-    });
+
+  it('should fail for invalid data', async () => {
+    const invalidData = {
+      // Отсутствует обязательное поле fileName
+      companyName: 'Test Company',
+      documentType: 'excel',
+      dates: ['2023'],
+      indicators: ['Revenue']
+    };
+
 
     try {
-      await invalidData.save();
-      throw new Error('Should not reach this point');
+      const data = new Data(invalidData);
+      await data.save();
+      expect.fail('Should throw validation error');
     } catch (error) {
-      expect(error).to.be.instanceOf(mongoose.Error.ValidationError);
+      expect(error).to.be.instanceOf(Error);
+      expect(error.name).to.equal('ValidationError');
     }
   });
 
-  it('should handle date formats correctly', async function() {
-    const dataWithDates = new Data({
-      fileName: 'test-dates.xlsx',
-      uploadDate: new Date(),
-      companyName: 'Тестовая компания',
-      dates: ['01.01.2020', '01.01.2021', '01.01.2022'],
-      indicators: ['Выручка'],
+
+  it('should handle date formats correctly', async () => {
+    const testData = {
+      fileName: 'test.xlsx',
+      documentType: 'excel',
+      companyName: 'Test Company',
+      dates: ['01.2023', '02.2023', '2024'],
+      indicators: ['Revenue'],
       data: [{
         rowNumber: 1,
-        label: 'Выручка',
-        indicator: 'Выручка',
+        indicator: 'Revenue',
         values: {
-          '01.01.2020': 1000,
-          '01.01.2021': 2000,
-          '01.01.2022': 3000
-        },
-        tags: ['выручка', '2020', '2021', '2022']
+          '01.2023': 1000000,
+          '02.2023': 1100000,
+          '2024': 1200000
+        }
       }],
       metadata: {
         format: 'monthly',
@@ -86,25 +125,170 @@ describe('Data Model Test', function() {
           rowCount: 1,
           columnCount: 3,
           processedAt: new Date()
-        },
-        tagging: {
-          tags: ['выручка', '2020', '2021', '2022'],
-          tagCount: 4
         }
-      },
-      tags: ['выручка', '2020', '2021', '2022'],
-      status: 'completed'
-    });
+      }
+    };
 
-    const savedData = await dataWithDates.save();
+
+    const data = new Data(testData);
+    const savedData = await data.save();
+
+
     expect(savedData.metadata.format).to.equal('monthly');
+    expect(savedData.dates).to.include('01.2023');
+    expect(savedData.dates).to.include('2024');
   });
 
-  after(async function() {
-    this.timeout(10000);
-    await Data.deleteMany({});
-    await disconnectDB();
+
+  it('should handle multiple data blocks', async () => {
+    const testData = {
+      fileName: 'test.xlsx',
+      documentType: 'excel',
+      companyName: 'Test Company',
+      dates: ['2023', '2024'],
+      indicators: ['Revenue', 'Profit'],
+      data: [
+        {
+          rowNumber: 1,
+          indicator: 'Revenue',
+          values: {
+            '2023': 1000000,
+            '2024': 1200000
+          }
+        },
+        {
+          rowNumber: 2,
+          indicator: 'Profit',
+          values: {
+            '2023': 300000,
+            '2024': 350000
+          }
+        }
+      ],
+      metadata: {
+        format: 'yearly',
+        statistics: {
+          rowCount: 2,
+          columnCount: 2,
+          processedAt: new Date()
+        }
+      }
+    };
+
+
+    const data = new Data(testData);
+    const savedData = await data.save();
+
+
+    expect(savedData.data).to.have.lengthOf(2);
+    expect(savedData.indicators).to.include('Revenue');
+    expect(savedData.indicators).to.include('Profit');
+  });
+
+
+  it('should validate metadata structure', async () => {
+    const testData = {
+      fileName: 'test.xlsx',
+      documentType: 'excel',
+      companyName: 'Test Company',
+      dates: ['2023'],
+      indicators: ['Revenue'],
+      data: [{
+        rowNumber: 1,
+        indicator: 'Revenue',
+        values: { '2023': 1000000 }
+      }],
+      metadata: {
+        format: 'invalid_format', // Неверный формат
+        statistics: {
+          rowCount: 1,
+          columnCount: 1
+        }
+      }
+    };
+
+
+    try {
+      const data = new Data(testData);
+      await data.save();
+      expect.fail('Should throw validation error');
+    } catch (error) {
+      expect(error).to.be.instanceOf(Error);
+      expect(error.name).to.equal('ValidationError');
+      expect(error.message).to.include('format');
+    }
+  });
+
+
+  it('should handle empty values correctly', async () => {
+    const testData = {
+      fileName: 'test.xlsx',
+      documentType: 'excel',
+      companyName: 'Test Company',
+      dates: ['2023'],
+      indicators: ['Revenue'],
+      data: [{
+        rowNumber: 1,
+        indicator: 'Revenue',
+        values: { '2023': '' } // Пустое значение
+      }],
+      metadata: {
+        format: 'yearly',
+        statistics: {
+          rowCount: 1,
+          columnCount: 1,
+          processedAt: new Date()
+        }
+      }
+    };
+
+
+    const data = new Data(testData);
+    const savedData = await data.save();
+
+
+    expect(savedData.data[0].values['2023']).to.equal('');
+  });
+
+
+  it('should update existing document', async () => {
+    // Создаем исходный документ
+    const initialData = {
+      fileName: 'test.xlsx',
+      documentType: 'excel',
+      companyName: 'Test Company',
+      dates: ['2023'],
+      indicators: ['Revenue'],
+      data: [{
+        rowNumber: 1,
+        indicator: 'Revenue',
+        values: { '2023': 1000000 }
+      }],
+      metadata: {
+        format: 'yearly',
+        statistics: {
+          rowCount: 1,
+          columnCount: 1,
+          processedAt: new Date()
+        }
+      }
+    };
+
+
+    const data = new Data(initialData);
+    const savedData = await data.save();
+
+
+    // Обновляем документ
+    savedData.companyName = 'Updated Company';
+    savedData.data[0].values['2023'] = 1100000;
+    const updatedData = await savedData.save();
+
+
+    expect(updatedData.companyName).to.equal('Updated Company');
+    expect(updatedData.data[0].values['2023']).to.equal(1100000);
   });
 });
+
 
 

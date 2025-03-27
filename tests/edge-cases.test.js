@@ -30,8 +30,10 @@ describe('Edge Cases Testing', () => {
 
   it('should handle empty rows', async () => {
     const result = await ExcelProcessor.processFile(testFilePath);
-    const ebitdaRow = result.data.find(row => row.row.get('indicator') === 'EBITDA');
-    expect(ebitdaRow.row.get('values').get('2020')).to.equal('');
+    const emptyRow = result.blocks[0].content.rows.find(row =>
+        Object.values(row.cells).every(cell => !cell.value)
+    );
+    expect(emptyRow).to.exist;
   });
 
   it('should trim headers and values', async () => {

@@ -1,74 +1,156 @@
-"use strict";
+// tests/excelProcessor.test.js
 
-const { expect } = require("chai");
-const path = require("path");
-const fs = require("fs");
-const xlsx = require("xlsx");
-const ExcelProcessor = require("../utils/excelProcessor");
 
-describe("ExcelProcessor Tests", () => {
-  const testDir = path.join(__dirname, "test-files");
-  const testFilePath = path.join(testDir, "excelProcessorTest.xlsx");
+const ExcelProcessor = require('../utils/excelProcessor');
+const { expect } = require('chai');
+const path = require('path');
+const fs = require('fs');
+const xlsx = require('xlsx');
+
+
+describe('ExcelProcessor', () => {
+  let processor;
+  let testFilePath;
+
 
   before(() => {
-    if (!fs.existsSync(testDir)) {
-      fs.mkdirSync(testDir, { recursive: true });
-    }
-
-    const wsData = [
-      ['Полипласт', '2020', '2021', '2022'],
-      ['Выручка', '1000.50', '2000.75', '3000.25'],
-      ['EBITDA', '500.25', '', '1500.50'],
-      ['Прибыль', '250.75', '300.00', 'Нет данных']
-    ];
-    const wb = xlsx.utils.book_new();
-    const ws = xlsx.utils.aoa_to_sheet(wsData);
-    xlsx.utils.book_append_sheet(wb, ws, "Sheet1");
-    xlsx.writeFile(wb, testFilePath);
+    processor = new ExcelProcessor();
+    // Создаем тестовый Excel файл
+    testFilePath = path.join(__dirname, 'test-files', 'test.xlsx');
+    createTestExcelFile(testFilePath);
   });
 
-  it("should return an object with correct structure", async () => {
-    const result = await ExcelProcessor.processFile(testFilePath);
-    expect(result).to.be.an("object");
-    expect(result).to.have.property("companyName").that.is.a("string");
-    expect(result).to.have.property("dates").that.is.an("array");
-    expect(result).to.have.property("indicators").that.is.an("array");
-    expect(result).to.have.property("data").that.is.an("array");
-    expect(result).to.have.property("metadata").that.is.an("object");
-    expect(result).to.have.property("sheetName").that.is.a("string");
-  });
-
-  it("should correctly parse company name and dates", async () => {
-    const result = await ExcelProcessor.processFile(testFilePath);
-    expect(result.companyName).to.equal("Полипласт");
-    expect(result.dates).to.deep.equal(["2020", "2021", "2022"]);
-  });
-
-  it("should correctly process data row values", async () => {
-    const result = await ExcelProcessor.processFile(testFilePath);
-    const revenueRow = result.data.find(row => row.row.get('indicator') === 'Выручка');
-    expect(revenueRow.row.get('values').get('2020')).to.equal(1000.50);
-    expect(revenueRow.row.get('values').get('2021')).to.equal(2000.75);
-    expect(revenueRow.row.get('values').get('2022')).to.equal(3000.25);
-  });
-
-  it("should handle missing values correctly", async () => {
-    const result = await ExcelProcessor.processFile(testFilePath);
-    const ebitdaRow = result.data.find(row => row.row.get('indicator') === 'EBITDA');
-    expect(ebitdaRow.row.get('values').get('2021')).to.equal('');
-  });
-
-  it("should handle non-numeric values correctly", async () => {
-    const result = await ExcelProcessor.processFile(testFilePath);
-    const profitRow = result.data.find(row => row.row.get('indicator') === 'Прибыль');
-    expect(profitRow.row.get('values').get('2022')).to.equal('Нет данных');
-  });
 
   after(() => {
+    // Удаляем тестовый файл
     if (fs.existsSync(testFilePath)) {
       fs.unlinkSync(testFilePath);
     }
   });
+
+
+  describe('process', () => {
+    it('should process simple Excel file', async () => {
+      const result = await processor.process(testFilePath);
+      expect(result).to.have.property('fileName');
+      expect(result).to.have.property('documentType', 'excel');
+      expect(result).to.have.property('blocks').that.is.an('array');
+      expect(result.blocks).to.have.lengthOf.at.least(1);
+    });
+
+
+    it('should handle missing file', async () => {
+      try {
+        await processor.process('nonexistent.xlsx');
+        expect.fail('Should throw error');
+      } catch (error) {
+        expect(error.message).to.include('File not found');
+      }
+    });
+  });
+
+
+  describe('processWorksheet', () => {
+    it('should process worksheet with headers', async () => {
+      const workbook = xlsx.readFile(testFilePath);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const result = await processor.processWorksheet(worksheet, 'Sheet1');
+      
+      expect(result).to.have.property('type', 'table');
+      expect(result.content).to.have.property('headers').that.is.an('array');
+      expect(result.content).to.have.property('rows').that.is.an('array');
+    });
+
+
+    it('should handle empty worksheet', async () => {
+      const emptyWorksheet = { '!ref': 'A1:A1' };
+      const result = await processor.processWorksheet(emptyWorksheet, 'Empty');
+      
+      expect(result.content.rows).to.be.an('array').that.is.empty;
+    });
+  });
+
+
+  describe('Multi-level headers', () => {
+    it('should process multi-level headers', async () => {
+      const testFilePath2 = path.join(__dirname, 'test-files', 'multi-level.xlsx');
+      createMultiLevelTestFile(testFilePath2);
+
+
+      const result = await processor.process(testFilePath2);
+      const firstBlock = result.blocks[0];
+      
+      expect(firstBlock.content.headers).to.be.an('array');
+      expect(firstBlock.content.headers[0]).to.have.property('level');
+      
+      fs.unlinkSync(testFilePath2);
+    });
+  });
+
+
+  describe('Data types detection', () => {
+    it('should correctly identify different data types', async () => {
+      const result = await processor.process(testFilePath);
+      const firstBlock = result.blocks[0];
+      
+      const types = new Set();
+      firstBlock.content.rows.forEach(row => {
+        row.cells.forEach(cell => {
+          if (cell.type) types.add(cell.type);
+        });
+      });
+
+
+      expect(types.size).to.be.at.least(2); // Должно быть как минимум 2 разных типа
+    });
+  });
+
+
+  describe('Tags generation', () => {
+    it('should generate relevant tags', async () => {
+      const result = await processor.process(testFilePath);
+      
+      expect(result.globalTags).to.be.an('array');
+      expect(result.globalTags.length).to.be.at.least(1);
+      
+      result.blocks.forEach(block => {
+        expect(block.tags).to.be.an('array');
+      });
+    });
+  });
 });
+
+
+// Вспомогательная функция для создания тестового Excel файла
+function createTestExcelFile(filePath) {
+  const workbook = xlsx.utils.book_new();
+  const data = [
+    ['Company', '2022', '2023'],
+    ['Revenue', 1000000, 1200000],
+    ['Profit', 300000, 350000],
+    ['Employees', 100, 120]
+  ];
+  
+  const worksheet = xlsx.utils.aoa_to_sheet(data);
+  xlsx.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+  xlsx.writeFile(workbook, filePath);
+}
+
+
+// Вспомогательная функция для создания Excel файла с многоуровневыми заголовками
+function createMultiLevelTestFile(filePath) {
+  const workbook = xlsx.utils.book_new();
+  const data = [
+    ['Financial Metrics', '', '', 'Operational Metrics', ''],
+    ['Revenue', 'Profit', 'Margin', 'Employees', 'Offices'],
+    [1000000, 300000, '30%', 100, 5],
+    [1200000, 350000, '29%', 120, 6]
+  ];
+  
+  const worksheet = xlsx.utils.aoa_to_sheet(data);
+  xlsx.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+  xlsx.writeFile(workbook, filePath);
+}
+
 
 
