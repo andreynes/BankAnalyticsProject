@@ -16,6 +16,7 @@ backend/
 │   └── db.js
 ├── docs/
 │   └── architecture.md
+├── gitignore
 ├── models/
 │   └── Data.js
 ├── node_modules/
@@ -46,6 +47,7 @@ backend/
 │   │   └── upload.integration.test.js
 │   ├── tagAssigner.test.js
 │   ├── test-files/
+│   │   ├── large-test.xlsx
 │   │   └── sample.xlsx
 │   ├── testDataCreation.js
 │   ├── upload.test.js
@@ -53,19 +55,84 @@ backend/
 │       └── createTestFile.js
 ├── updateArchitecture.py
 ├── uploads/
-│   └── 1742977335596-sample.xlsx
-└── utils/
-    ├── autoTagger.js
-    ├── excelFormatHandler.js
-    ├── excelParser.js
-    ├── excelProcessor.js
-    ├── excelReader.js
-    └── tagAssigner.js
+│   ├── 1742977335596-sample.xlsx
+│   ├── 1742986079696-sample.xlsx
+│   ├── 1742986081255-sample.xlsx
+│   ├── 1742986801266-sample.xlsx
+│   ├── 1742986803649-sample.xlsx
+│   ├── 1742987054529-sample.xlsx
+│   ├── 1742987056317-sample.xlsx
+│   ├── 1742987239327-sample.xlsx
+│   ├── 1742987241056-sample.xlsx
+│   ├── 1742987740008-sample.xlsx
+│   ├── 1742987741681-sample.xlsx
+│   ├── 1742987911007-sample.xlsx
+│   ├── 1742987913595-sample.xlsx
+│   ├── 1742988182339-sample.xlsx
+│   ├── 1742988184715-sample.xlsx
+│   ├── 1742988370955-sample.xlsx
+│   ├── 1742988372901-sample.xlsx
+│   ├── 1742988523740-sample.xlsx
+│   ├── 1742988525698-sample.xlsx
+│   ├── 1742988744063-sample.xlsx
+│   ├── 1742988746200-sample.xlsx
+│   ├── 1742988996713-sample.xlsx
+│   ├── 1742988998317-sample.xlsx
+│   ├── 1742989127563-sample.xlsx
+│   ├── 1742989130348-sample.xlsx
+│   ├── 1742989399275-sample.xlsx
+│   ├── 1742989400885-sample.xlsx
+│   ├── 1742990930017-upload-api-test.xlsx
+│   ├── 1742990930113-large-test.xlsx
+│   ├── 1742991386580-upload-test.xlsx
+│   ├── 1742991387553-upload-api-test.xlsx
+│   ├── 1742991387603-large-test.xlsx
+│   ├── 1742993691108-upload-test.xlsx
+│   ├── 1742993691858-upload-api-test.xlsx
+│   ├── 1742993691913-large-test.xlsx
+│   ├── 1742994571140-upload-test.xlsx
+│   ├── 1742994573091-upload-api-test.xlsx
+│   ├── 1742995382675-upload-test.xlsx
+│   ├── 1742995384565-upload-api-test.xlsx
+│   ├── 1742995648921-upload-test.xlsx
+│   ├── 1742995650554-upload-api-test.xlsx
+│   ├── 1742999582223-upload-test.xlsx
+│   ├── 1742999584410-upload-api-test.xlsx
+│   ├── 1743002562939-upload-test.xlsx
+│   ├── 1743002564606-upload-api-test.xlsx
+│   ├── 1743002941176-upload-test.xlsx
+│   ├── 1743002943182-upload-api-test.xlsx
+│   ├── 1743004364241-upload-test.xlsx
+│   ├── 1743004366004-upload-api-test.xlsx
+│   ├── 1743004551556-upload-test.xlsx
+│   ├── 1743004553530-upload-api-test.xlsx
+│   ├── 1743004674162-upload-test.xlsx
+│   ├── 1743004676021-upload-api-test.xlsx
+│   ├── 1743005478411-upload-test.xlsx
+│   ├── 1743005479600-upload-api-test.xlsx
+│   ├── 1743006020657-upload-test.xlsx
+│   ├── 1743006528521-upload-test.xlsx
+│   ├── 1743006530271-upload-api-test.xlsx
+│   ├── 1743007131547-Газпром.xlsx
+│   ├── 1743009960460-upload-test.xlsx
+│   ├── 1743009963240-upload-api-test.xlsx
+│   ├── 1743011915189-upload-test.xlsx
+│   ├── 1743011918169-upload-api-test.xlsx
+│   └── 1743060456351-Газпром.xlsx
+├── utils/
+│   ├── autoTagger.js
+│   ├── excelFormatHandler.js
+│   ├── excelParser.js
+│   ├── excelProcessor.js
+│   ├── excelReader.js
+│   └── tagAssigner.js
+└── Газпром.xlsx
 ```
 
 ### Папка: .
 Содержимые файлы:
 - ARCHITECTURE.md
+- gitignore
 - optimal-tagging-strategy.txt
 - package-lock.json
 - package.json
@@ -75,6 +142,7 @@ backend/
 - test-sanitize.js
 - test-tagAssigner.js
 - updateArchitecture.py
+- Газпром.xlsx
 
 **Детали по файлам:**
 - **Файл**: test-tagAssigner.js (язык: js)
@@ -104,7 +172,7 @@ backend/
   - Function: **sanitize**
 - **Файл**: server.js (язык: js)
   - File_imports: **server.js**
-    - *Импорты:* ./routes/search, ./config/db, ./routes/upload
+    - *Импорты:* ./config/db, ./routes/search, ./routes/upload
 - **Файл**: test-autoTagger.js (язык: js)
   - File_imports: **test-autoTagger.js**
     - *Импорты:* ./utils/autoTagger
@@ -121,28 +189,15 @@ backend/
 
 **Детали по файлам:**
 - **Файл**: taskpane.js (язык: js)
-  - Function: **onSearch**
-    - *Описание:* SVG-иконки (копирование и зеленая галочка) в стиле Jay Copilot Новая иконка для графика (можно заменить на любую понравившуюся) Данные выручки по годам Данные чистой прибыли по годам
   - Function: **showRevenueYear**
-    - *Описание:* Отображение выручки за конкретный год с кнопкой копирования (индивидуальный результат – plain text)
+    - *Описание:* ... (оставляем SVG-иконки без изменений) ... Функция для получения данных из API Определяем тип запроса по тегам
   - Function: **showRevenueTable**
-    - *Описание:* Отображение таблицы с выручкой по всем годам (команда "полипласт выручка")
   - Function: **showNetProfitTable**
-    - *Описание:* Обработчики для копирования отдельного числа Обработчик для копирования таблицы (HTML без колонки "Копировать") Обработчик для копирования графика Отображение таблицы с чистой прибылью по годам (команда "полипласт чистая прибыль")
+    - *Описание:* Добавляем обработчики событий
   - Function: **showCompanyIndicators**
-    - *Описание:* Отображение комбинированной таблицы с показателями (команда "полипласт")
-  - Function: **copyChart**
-    - *Описание:* Функция копирования графика. Создает canvas, рисует диаграмму и копирует изображение.
-  - Function: **showResult**
-    - *Описание:* Дополнительные показатели можно добавить по аналогии Создаем canvas для рисования графика Заливка фона белым цветом Параметры графика Отрисовка заголовка графика Отрисовка столбцов и подписей Столбец Подпись года Преобразование canvas в изображение (Blob) и копирование в буфер обмена Функция вывода HTML-контента в элемент с id "result"
-  - Function: **copyWithFeedback**
-    - *Описание:* Функция копирования с обратной связью (для текста или HTML)
-  - Function: **showFeedback**
-    - *Описание:* Функция отображения обратной связи, заменяет содержимое кнопки на галочку с текстом "Скопировано"
-  - Function: **copyTableHtml**
-    - *Описание:* Функция копирования HTML таблицы без колонки "Копировать"
-  - Function: **formatNumber**
-    - *Описание:* Функция форматирования числа (добавление пробелов-разделителей)
+  - Function: **setupTableEventHandlers**
+    - *Описание:* ... (оставляем вспомогательные функции без изменений: copyChart, showResult, copyWithFeedback, showFeedback, copyTableHtml, formatNumber) ...
+  - Function: **setupCompanyTableEventHandlers**
 - **Файл**: taskpane.html (язык: html)
   - Html: **taskpane.html**
     - *Описание:* HTML файл
@@ -160,6 +215,11 @@ backend/
 Содержимые файлы:
 - Data.js
 
+**Детали по файлам:**
+- **Файл**: Data.js (язык: js)
+  - Function: **determineDateFormat**
+    - *Описание:* Функция определения формата даты
+
 ### Папка: routes
 Содержимые файлы:
 - search.js
@@ -168,7 +228,7 @@ backend/
 **Детали по файлам:**
 - **Файл**: upload.js (язык: js)
   - File_imports: **upload.js**
-    - *Импорты:* ../utils/excelProcessor, ../models/Data
+    - *Импорты:* ../config/db, ../models/Data, ../utils/excelProcessor
 - **Файл**: search.js (язык: js)
   - File_imports: **search.js**
     - *Импорты:* ../models/Data
@@ -223,10 +283,10 @@ backend/
     - *Метод:* looksLikePercentage
 - **Файл**: upload.test.js (язык: js)
   - File_imports: **upload.test.js**
-    - *Импорты:* ../server, ../config/db
+    - *Импорты:* ../config/db, ../server
 - **Файл**: excelParser.test.js (язык: js)
   - File_imports: **excelParser.test.js**
-    - *Импорты:* ../utils/excelParser
+    - *Импорты:* ../utils/excelProcessor
 
 ### Папка: tests/integration
 Содержимые файлы:
@@ -247,6 +307,7 @@ backend/
 
 ### Папка: tests/test-files
 Содержимые файлы:
+- large-test.xlsx
 - sample.xlsx
 
 ### Папка: tests/utils
@@ -260,6 +321,69 @@ backend/
 ### Папка: uploads
 Содержимые файлы:
 - 1742977335596-sample.xlsx
+- 1742986079696-sample.xlsx
+- 1742986081255-sample.xlsx
+- 1742986801266-sample.xlsx
+- 1742986803649-sample.xlsx
+- 1742987054529-sample.xlsx
+- 1742987056317-sample.xlsx
+- 1742987239327-sample.xlsx
+- 1742987241056-sample.xlsx
+- 1742987740008-sample.xlsx
+- 1742987741681-sample.xlsx
+- 1742987911007-sample.xlsx
+- 1742987913595-sample.xlsx
+- 1742988182339-sample.xlsx
+- 1742988184715-sample.xlsx
+- 1742988370955-sample.xlsx
+- 1742988372901-sample.xlsx
+- 1742988523740-sample.xlsx
+- 1742988525698-sample.xlsx
+- 1742988744063-sample.xlsx
+- 1742988746200-sample.xlsx
+- 1742988996713-sample.xlsx
+- 1742988998317-sample.xlsx
+- 1742989127563-sample.xlsx
+- 1742989130348-sample.xlsx
+- 1742989399275-sample.xlsx
+- 1742989400885-sample.xlsx
+- 1742990930017-upload-api-test.xlsx
+- 1742990930113-large-test.xlsx
+- 1742991386580-upload-test.xlsx
+- 1742991387553-upload-api-test.xlsx
+- 1742991387603-large-test.xlsx
+- 1742993691108-upload-test.xlsx
+- 1742993691858-upload-api-test.xlsx
+- 1742993691913-large-test.xlsx
+- 1742994571140-upload-test.xlsx
+- 1742994573091-upload-api-test.xlsx
+- 1742995382675-upload-test.xlsx
+- 1742995384565-upload-api-test.xlsx
+- 1742995648921-upload-test.xlsx
+- 1742995650554-upload-api-test.xlsx
+- 1742999582223-upload-test.xlsx
+- 1742999584410-upload-api-test.xlsx
+- 1743002562939-upload-test.xlsx
+- 1743002564606-upload-api-test.xlsx
+- 1743002941176-upload-test.xlsx
+- 1743002943182-upload-api-test.xlsx
+- 1743004364241-upload-test.xlsx
+- 1743004366004-upload-api-test.xlsx
+- 1743004551556-upload-test.xlsx
+- 1743004553530-upload-api-test.xlsx
+- 1743004674162-upload-test.xlsx
+- 1743004676021-upload-api-test.xlsx
+- 1743005478411-upload-test.xlsx
+- 1743005479600-upload-api-test.xlsx
+- 1743006020657-upload-test.xlsx
+- 1743006528521-upload-test.xlsx
+- 1743006530271-upload-api-test.xlsx
+- 1743007131547-Газпром.xlsx
+- 1743009960460-upload-test.xlsx
+- 1743009963240-upload-api-test.xlsx
+- 1743011915189-upload-test.xlsx
+- 1743011918169-upload-api-test.xlsx
+- 1743060456351-Газпром.xlsx
 
 ### Папка: utils
 Содержимые файлы:
@@ -273,10 +397,15 @@ backend/
 **Детали по файлам:**
 - **Файл**: excelProcessor.js (язык: js)
   - Class: **ExcelProcessor**
-    - *Поля:* rawData, label, label, cell, cell, cell, s, s, cell
+    - *Поля:* value
 - **Файл**: autoTagger.js (язык: js)
   - Class: **AutoTagger**
+    - *Метод:* constructor
     - *Метод:* analyzeTags
+    - *Метод:* looksLikeDate
+    - *Метод:* looksLikeMoney
+    - *Метод:* looksLikeOrganization
+    - *Метод:* analyzeDataContent
 - **Файл**: excelFormatHandler.js (язык: js)
   - Class: **ExcelFormatHandler**
     - *Поля:* value
@@ -290,10 +419,10 @@ backend/
     - *Метод:* cleanup
 - **Файл**: excelParser.js (язык: js)
   - Function: **sanitize**
-    - *Описание:* Функция очистки ячейки (sanitize)
+    - *Описание:* Улучшенная функция sanitize
+  - Class: **ExcelParser**
+    - *Описание:* Базовая проверка на null/undefined Если это число Преобразование в строку и базовая очистка Проверка на повторяющиеся символы Проверка на спецсимволы Проверка на число в строковом формате Ограничение длины строки
   - Class: **ExcelProcessor**
-    - *Описание:* Если значение уже число, форматируем с двумя знаками после запятой Если все символы одинаковы (без учета регистра), вернуть пустую строку Если строка состоит только из специальных символов, например "!@#$%^&*()" Если строка выглядит как число, форматируем его
-    - *Поля:* rawData, rawData
 - **Файл**: tagAssigner.js (язык: js)
   - Class: **TagAssigner**
     - *Поля:* normalized
