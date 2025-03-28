@@ -1,38 +1,42 @@
-"use strict";
+// tests/database.test.js
 
 const { expect } = require('chai');
+const db = require('../config/db');
 const mongoose = require('mongoose');
-const { connectDB, disconnectDB } = require('../config/db');
 
-describe('Database Connection', function() {
-  before(function(done) {
-    this.timeout(30000);
-    connectDB().then(() => done()).catch(done);
+describe('Database Connection', () => {
+  beforeEach(async function() {
+    if (!process.env.MONGODB_URI) {
+      console.log('Skipping database tests - no MongoDB URI provided');
+      this.skip();
+    }
   });
 
-  it('should connect to MongoDB', () => {
-    expect(mongoose.connection.readyState).to.equal(1);
+  afterEach(async () => {
+    await mongoose.connection.close();
   });
 
-  it('should use test database', () => {
-    expect(mongoose.connection.name).to.equal('bankanalytics');
+  it('should connect to MongoDB', async () => {
+    const conn = await db.connect();
+    expect(conn.connection.readyState).to.equal(1);
+  });
+
+  it('should use test database', async () => {
+    const conn = await db.connect();
+    expect(conn.connection.name).to.equal('testdb');
   });
 
   it('should handle multiple connections', async () => {
-    // Пробуем подключиться повторно
-    await connectDB();
-    expect(mongoose.connection.readyState).to.equal(1);
+    const conn1 = await db.connect();
+    const conn2 = await db.connect();
+    expect(conn1.connection.readyState).to.equal(1);
+    expect(conn2.connection.readyState).to.equal(1);
   });
 
   it('should handle disconnection', async () => {
-    await disconnectDB();
+    await db.connect();
+    await db.disconnect();
     expect(mongoose.connection.readyState).to.equal(0);
-    // Восстанавливаем подключение для следующих тестов
-    await connectDB();
-  });
-
-  after(async () => {
-    await disconnectDB();
   });
 });
 

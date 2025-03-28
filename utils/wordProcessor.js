@@ -212,6 +212,10 @@ class WordProcessor extends BaseDataProcessor {
    * @returns {Promise<Object>} - Обработанный блок
    */
   async processTableBlock(table) {
+    if (!table || !table.children || table.children.length === 0) {
+        return null;
+    }
+    
     const headers = this.extractTableHeaders(table);
     const rows = this.extractTableRows(table, headers);
     const mergedCells = this.extractMergedCells(table);

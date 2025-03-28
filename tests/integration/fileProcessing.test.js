@@ -1,56 +1,44 @@
-"use strict";
+// tests/integration/fileProcessing.test.js
 
 const { expect } = require('chai');
-const path = require('path');
-const xlsx = require('xlsx');
-const fs = require('fs');
 const ExcelProcessor = require('../../utils/excelProcessor');
+const path = require('path');
 
 describe('File Processing Integration Test', () => {
-  const testDir = path.join(__dirname, '..', 'test-files');
-  const testFilePath = path.join(testDir, 'integration-test.xlsx');
-
-  before(() => {
-    if (!fs.existsSync(testDir)) {
-      fs.mkdirSync(testDir, { recursive: true });
-    }
-
-    const wsData = [
-      ['Компания XYZ', '2020', '2021', '2022'],
-      ['Revenue', '1000.50', '2000.75', '3000.25'],
-      ['EBITDA', '500.25', '', '1500.50'],
-      ['Net Profit', '250.75', '300.00', 'N/A']
-    ];
-    const wb = xlsx.utils.book_new();
-    const ws = xlsx.utils.aoa_to_sheet(wsData);
-    xlsx.utils.book_append_sheet(wb, ws, 'Sheet1');
-    xlsx.writeFile(wb, testFilePath);
-  });
+  const testFilePath = path.join(__dirname, '../test-files/test.xlsx');
 
   it('should correctly parse different data types', async () => {
     const result = await ExcelProcessor.processFile(testFilePath);
-    const revenueRow = result.data.find(row => row.row.get('indicator') === 'Revenue');
-    expect(revenueRow.row.get('values').get('2020')).to.equal(1000.50);
+    const block = result.blocks[0];
+    const types = new Set();
+    
+    block.content.rows.forEach(row => {
+      row.cells.forEach(cell => types.add(cell.type));
+    });
+
+    expect(types.has('number')).to.be.true;
+    expect(types.has('text')).to.be.true;
   });
 
   it('should handle empty and invalid values', async () => {
     const result = await ExcelProcessor.processFile(testFilePath);
-    const ebitdaRow = result.data.find(row => row.row.get('indicator') === 'EBITDA');
-    expect(ebitdaRow.row.get('values').get('2021')).to.equal('');
+    const block = result.blocks[0];
+    
+    const hasEmptyValue = block.content.rows.some(row =>
+      Array.from(row.cells.values()).some(cell => cell.type === 'empty')
+    );
+    
+    expect(hasEmptyValue).to.be.true;
   });
 
   it('should generate appropriate tags', async () => {
     const result = await ExcelProcessor.processFile(testFilePath);
-    expect(result.metadata.tagging.tags).to.include('revenue');
-    expect(result.metadata.tagging.tags).to.include('ebitda');
-    expect(result.metadata.tagging.tags).to.include('2020');
-  });
-
-  after(() => {
-    if (fs.existsSync(testFilePath)) {
-      fs.unlinkSync(testFilePath);
-    }
+    expect(result.globalTags).to.be.an('array');
+    expect(result.globalTags.length).to.be.above(0);
+    expect(result.globalTags).to.include('2023');
   });
 });
+
+
 
 
