@@ -12,12 +12,12 @@ const connectDB = async () => {
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
       dbName: process.env.NODE_ENV === 'test' ? 'testdb' : 'bankanalytics'
     });
-    
+
     console.log(`MongoDB connected: ${conn.connection.host}`);
     return conn;
   } catch (error) {
     console.error(`Error connecting to MongoDB: ${error.message}`);
-    throw error; // Пробрасываем ошибку дальше
+    throw error;
   }
 };
 

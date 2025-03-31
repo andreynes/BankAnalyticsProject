@@ -172,7 +172,7 @@ DataSchema.statics.findByTags = function(tags) {
 };
 
 
-module.exports = mongoose.model('Data', DataSchema);
+module.exports = require('./index');
 
 
 

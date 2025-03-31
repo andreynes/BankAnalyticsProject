@@ -31,15 +31,27 @@ class WordProcessor extends BaseDataProcessor {
     }
 
     try {
-      const { value: content, messages } = await mammoth.extractRawText({
-        path: filePath,
-        styleMap: [
-          "p[style-name='Heading 1'] => h1:fresh",
-          "p[style-name='Heading 2'] => h2:fresh",
-          "p[style-name='Heading 3'] => h3:fresh"
-        ]
+      const { value: content } = await mammoth.extractRawText({
       });
 
+      // Проверка на пустой документ
+      if (!content.trim()) {
+        return {
+          fileName: path.basename(filePath),
+          documentType: 'word',
+          blocks: [],
+          globalTags: [],
+          metadata: {
+            statistics: {
+              fileSize: fs.statSync(filePath).size,
+              totalBlocks: 0,
+              textBlocks: 0,
+              tableBlocks: 0
+            }
+          }
+        };
+      }
+  
       const result = {
         fileName: path.basename(filePath),
         documentType: 'word',
@@ -155,21 +167,26 @@ class WordProcessor extends BaseDataProcessor {
    * @returns {Promise<Object>} - Обработанный блок
    */
   async processTextBlock(content) {
-    const isHeading = /^h[1-6]/.test(content);
-    const tags = this.extractTags(content);
-
+    const isHeading = content.startsWith('Heading');
+    const formatting = {
+      bold: content.includes('**') || isHeading,
+      italic: content.includes('_'),
+      size: isHeading ? 'large' : 'normal',
+      alignment: this.determineAlignment(content)
+    };
+  
     return {
       type: 'text',
       content: {
         text: content,
         paragraphs: content.split('\n').filter(p => p.trim()),
         isHeading,
-        level: isHeading ? parseInt(content.charAt(1)) : 0
+        formatting
       },
-      tags: Array.from(tags),
-      formatting: this.extractFormatting(content)
+      tags: Array.from(this.extractTags(content))
     };
   }
+  
 
   /**
    * Извлечение таблиц
@@ -212,15 +229,14 @@ class WordProcessor extends BaseDataProcessor {
    * @returns {Promise<Object>} - Обработанный блок
    */
   async processTableBlock(table) {
-    if (!table || !table.children || table.children.length === 0) {
-        return null;
+    if (!table.children || !table.children[0]) {
+      return null;
     }
-    
+  
     const headers = this.extractTableHeaders(table);
     const rows = this.extractTableRows(table, headers);
     const mergedCells = this.extractMergedCells(table);
-    const tags = this.extractTableTags(headers, rows);
-
+  
     return {
       type: 'table',
       content: {
@@ -232,10 +248,10 @@ class WordProcessor extends BaseDataProcessor {
         })),
         mergedCells
       },
-      tags: Array.from(tags)
+      tags: this.extractTableTags(headers, rows)
     };
   }
-
+  
   /**
    * Извлечение заголовков таблицы
    * @param {Object} table - Таблица
@@ -277,21 +293,22 @@ class WordProcessor extends BaseDataProcessor {
    */
   extractMergedCells(table) {
     const mergedCells = [];
+    
     if (!table.children) return mergedCells;
-
+  
     table.children.forEach((row, rowIndex) => {
       row.children.forEach((cell, colIndex) => {
-        if (cell.mergeInfo) {
+        if (cell.rowSpan > 1 || cell.colSpan > 1) {
           mergedCells.push({
             row: rowIndex,
             col: colIndex,
-            rowSpan: cell.mergeInfo.rowSpan || 1,
-            colSpan: cell.mergeInfo.colSpan || 1
+            rowSpan: cell.rowSpan || 1,
+            colSpan: cell.colSpan || 1
           });
         }
       });
     });
-
+  
     return mergedCells;
   }
 
@@ -381,11 +398,12 @@ class WordProcessor extends BaseDataProcessor {
    * @returns {string} - Тип выравнивания
    */
   determineAlignment(content) {
-    if (/^:.*:$/.test(content)) return 'center';
-    if (/^:/.test(content)) return 'left';
-    if (/:$/.test(content)) return 'right';
+    if (content.startsWith('>')) return 'right';
+    if (content.startsWith('<')) return 'left';
+    if (content.startsWith('|')) return 'center';
     return 'left';
   }
+  
 
   /**
    * Валидация файла

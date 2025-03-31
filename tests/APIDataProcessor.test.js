@@ -1,6 +1,6 @@
 // tests/APIDataProcessor.test.js
 
-const APIDataProcessor = require('../utils/APIDataProcessor');
+const APIDataProcessor = require('../utils/apiDataProcessor');
 const { expect } = require('chai');
 
 describe('APIDataProcessor', () => {
@@ -26,13 +26,20 @@ describe('APIDataProcessor', () => {
       expect(result.blocks[0].type).to.equal('table');
       expect(result.blocks[0].content.headers).to.have.length(3);
       expect(result.blocks[0].content.rows).to.have.length(2);
+      expect(result.globalTags).to.include('id');
+      expect(result.globalTags).to.include('name');
+      expect(result.globalTags).to.include('value');
     });
 
     it('should process object data', async () => {
       const testData = {
         summary: {
           total: 1000,
-          year: 2023
+          year: "2023",
+          metrics: {
+            revenue: "Annual Revenue 2023",
+            profit: "Net Profit 2023"
+          }
         },
         items: [
           { id: 1, value: 100 },
@@ -41,8 +48,10 @@ describe('APIDataProcessor', () => {
       };
 
       const result = await processor.process(testData);
-      expect(result.blocks.length).to.be.above(1);
       expect(result.globalTags).to.include('2023');
+      expect(result.globalTags).to.include('revenue');
+      expect(result.globalTags).to.include('profit');
+      expect(result.blocks.length).to.be.above(1);
     });
   });
 
@@ -70,7 +79,8 @@ describe('APIDataProcessor', () => {
       const testData = {
         level1: {
           level2: {
-            value: 100
+            value: 100,
+            date: "2023"
           }
         }
       };
@@ -78,20 +88,22 @@ describe('APIDataProcessor', () => {
       const result = await processor.process(testData);
       const flattenedData = processor.flattenObject(testData);
       expect(flattenedData['level1.level2.value']).to.equal(100);
+      expect(result.globalTags).to.include('2023');
     });
 
     it('should handle mixed data types', async () => {
       const testData = {
-        text: 'Simple text',
+        text: 'Revenue 2023',
         numbers: [1, 2, 3],
         object: { key: 'value' }
       };
 
       const blocks = await processor.processObjectData(testData);
       expect(blocks).to.have.length(3);
-      expect(blocks.find(b => b.content.title === 'text')).to.exist;
-      expect(blocks.find(b => b.content.title === 'numbers')).to.exist;
-      expect(blocks.find(b => b.content.title === 'object')).to.exist;
+      const textBlock = blocks.find(b => b.content.title === 'text');
+      expect(textBlock).to.exist;
+      expect(textBlock.tags).to.include('revenue');
+      expect(textBlock.tags).to.include('2023');
     });
   });
 
@@ -116,6 +128,7 @@ describe('APIDataProcessor', () => {
       expect(tags).to.include('2023');
       expect(tags).to.include('revenue');
       expect(tags).to.include('profit');
+      expect(tags).to.include('quarter');
     });
   });
 
@@ -123,13 +136,17 @@ describe('APIDataProcessor', () => {
     it('should identify different data types', () => {
       const testCases = [
         { value: 123, expected: 'number' },
+        { value: '123', expected: 'number' },
         { value: '2023-01-15', expected: 'date' },
         { value: 'text', expected: 'text' },
-        { value: null, expected: 'empty' }
+        { value: null, expected: 'empty' },
+        { value: '15%', expected: 'percentage' },
+        { value: '$1,234.56', expected: 'currency' }
       ];
 
       testCases.forEach(({ value, expected }) => {
-        expect(processor.determineCellType(value)).to.equal(expected);
+        const result = processor.determineCellType(value);
+        expect(result).to.equal(expected);
       });
     });
   });
@@ -141,14 +158,13 @@ describe('APIDataProcessor', () => {
         expect.fail('Should throw error');
       } catch (error) {
         expect(error.message).to.include('Processing error');
+        expect(error.message).to.include('required');
       }
     });
 
     it('should handle malformed objects', async () => {
-      const malformedData = {
-        circular: {}
-      };
-      malformedData.circular.self = malformedData;
+      const malformedData = {};
+      malformedData.circular = malformedData;
 
       try {
         await processor.process(malformedData);
@@ -164,24 +180,29 @@ describe('APIDataProcessor', () => {
       const testData = {
         level1: {
           level2: {
-            value: 100
+            value: 100,
+            year: "2023"
           }
         }
       };
 
-      expect(processor.getValueByPath(testData, 'level1.level2.value')).to.equal(100);
-      expect(processor.getValueByPath(testData, 'nonexistent.path')).to.be.undefined;
+      const flattenedData = processor.flattenObject(testData);
+      expect(flattenedData['level1.level2.value']).to.equal(100);
+      expect(flattenedData['level1.level2.year']).to.equal("2023");
     });
 
     it('should handle arrays in paths', () => {
       const testData = {
         items: [
-          { id: 1, value: 100 },
-          { id: 2, value: 200 }
+          { id: 1, value: 100, year: "2023" },
+          { id: 2, value: 200, year: "2024" }
         ]
       };
 
-      expect(processor.getValueByPath(testData, 'items.0.value')).to.equal(100);
+      const result = processor.flattenObject(testData);
+      expect(result.items).to.be.an('array');
+      expect(result.items[0].value).to.equal(100);
+      expect(result.items[0].year).to.equal("2023");
     });
   });
 

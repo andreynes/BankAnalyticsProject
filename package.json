@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "pretest": "node tests/utils/createTestFiles.js",
-    "test": "NODE_ENV=test mocha --timeout 30000 'tests/**/*.test.js' --exit",
+    "test": "NODE_ENV=test mocha --timeout 30000 --file tests/setup.js 'tests/**/*.test.js' --exit",
     "test:integration": "NODE_ENV=test mocha --timeout 30000 'tests/integration/**/*.test.js' --exit",
     "test:unit": "NODE_ENV=test mocha --timeout 30000 'tests/unit/**/*.test.js' --exit",
     "test:watch": "NODE_ENV=test mocha --watch --timeout 30000 'tests/**/*.test.js'",

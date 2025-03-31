@@ -3,57 +3,59 @@
 const fs = require('fs');
 const path = require('path');
 const xlsx = require('xlsx');
-const { Document, Packer, Paragraph, Table, TableRow, TableCell } = require('docx');
-
-// Создаем директории
-const testDir = path.join(__dirname, '../test-files');
-const uploadsDir = path.join(__dirname, '../../uploads');
-
-[testDir, uploadsDir].forEach(dir => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-});
+const { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun } = require('docx');
 
 /**
- * Создание базового тестового Excel файла
+ * Создание тестового Excel файла
  * @param {string} filePath - Путь для сохранения файла
  */
-function createTestExcelFile(filePath) {
+function createExcelTestFile(filePath) {
   const workbook = xlsx.utils.book_new();
   
+  // Создаем данные для листа
   const data = [
     ['Company Name', '2022', '2023'],
     ['Revenue', 1000000, 1200000],
     ['Profit', 300000, 350000],
-    ['Margin', '30%', '29.2%'],
-    ['', '', ''],  // Пустая строка
-    ['Notes', 'Special chars: @#$%', 'Very long text '.repeat(20)]
+    ['Margin', '30%', '29.2%']
   ];
 
   const worksheet = xlsx.utils.aoa_to_sheet(data);
   xlsx.utils.book_append_sheet(workbook, worksheet, 'Financial Data');
+
+  // Добавляем второй лист с другой структурой
+  const data2 = [
+    ['Department', 'Manager', 'Budget'],
+    ['Sales', 'John Doe', 500000],
+    ['Marketing', 'Jane Smith', 300000]
+  ];
+
+  const worksheet2 = xlsx.utils.aoa_to_sheet(data2);
+  xlsx.utils.book_append_sheet(workbook, worksheet2, 'Departments');
+
   xlsx.writeFile(workbook, filePath);
 }
 
 /**
- * Создание сложного Excel файла
+ * Создание большого тестового Excel файла
  * @param {string} filePath - Путь для сохранения файла
  */
-function createComplexExcelFile(filePath) {
+function createLargeExcelFile(filePath) {
   const workbook = xlsx.utils.book_new();
-  
-  const data = [
-    ['Financial Metrics', '', '', 'Operational Metrics', '', ''],
-    ['Revenue', 'Costs', 'Profit', 'Employees', 'Offices', 'Projects'],
-    ['Q1 2023', 1000000, 700000, 300000, 100, 5, 20],
-    ['Q2 2023', 1100000, 750000, 350000, 110, 5, 22],
-    ['Q3 2023', 1200000, 800000, 400000, 120, 6, 25],
-    ['Q4 2023', 1300000, 850000, 450000, 130, 6, 28]
-  ];
+  const data = [['Date', 'Product', 'Revenue', 'Units']];
+
+  // Генерируем 200 строк данных
+  for (let i = 1; i <= 200; i++) {
+    data.push([
+      `2023-${String(Math.floor(i/20) + 1).padStart(2, '0')}-01`,
+      `Product ${i}`,
+      Math.floor(Math.random() * 10000),
+      Math.floor(Math.random() * 100)
+    ]);
+  }
 
   const worksheet = xlsx.utils.aoa_to_sheet(data);
-  xlsx.utils.book_append_sheet(workbook, worksheet, 'Complex Data');
+  xlsx.utils.book_append_sheet(workbook, worksheet, 'Sales Data');
   xlsx.writeFile(workbook, filePath);
 }
 
@@ -67,11 +69,19 @@ async function createWordTestFile(filePath) {
       properties: {},
       children: [
         new Paragraph({
-          text: "Financial Analysis Report 2023",
+          children: [
+            new TextRun({
+              text: "Financial Analysis Report 2023",
+              bold: true,
+              size: 32
+            })
+          ],
           heading: 'Heading1'
         }),
         new Paragraph({
-          text: "This report contains financial analysis for fiscal year 2023."
+          children: [
+            new TextRun("This report contains financial analysis for fiscal year 2023.")
+          ]
         }),
         new Table({
           rows: [
@@ -100,28 +110,27 @@ async function createWordTestFile(filePath) {
 }
 
 /**
- * Создание пустых файлов для тестирования
- * @param {string} dir - Директория для сохранения файлов
- */
-function createEmptyFiles(dir) {
-  fs.writeFileSync(path.join(dir, 'empty.xlsx'), '');
-  fs.writeFileSync(path.join(dir, 'empty.docx'), '');
-}
-
-/**
  * Создание всех тестовых файлов
  */
-async function createAllTestFiles() {
-  try {
-    // Создаем основные тестовые файлы
-    createTestExcelFile(path.join(testDir, 'test.xlsx'));
-    createComplexExcelFile(path.join(testDir, 'complex-test.xlsx'));
-    await createWordTestFile(path.join(testDir, 'test.docx'));
-    createEmptyFiles(testDir);
+async function createTestFiles() {
+  // Создаем директории
+  const testDir = path.join(__dirname, '../test-files');
+  const uploadsDir = path.join(__dirname, '../../uploads');
 
-    // Создаем копии для тестов загрузки
-    createTestExcelFile(path.join(testDir, 'upload-test.xlsx'));
-    createTestExcelFile(path.join(testDir, 'upload-api-test.xlsx'));
+  [testDir, uploadsDir].forEach(dir => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  });
+
+  try {
+    // Создаем тестовые файлы
+    await Promise.all([
+      createExcelTestFile(path.join(testDir, 'test.xlsx')),
+      createExcelTestFile(path.join(testDir, 'upload-test.xlsx')),
+      createLargeExcelFile(path.join(testDir, 'large-test.xlsx')),
+      createWordTestFile(path.join(testDir, 'test.docx'))
+    ]);
 
     console.log('Test files created successfully');
   } catch (error) {
@@ -131,14 +140,13 @@ async function createAllTestFiles() {
 }
 
 // Запускаем создание файлов
-createAllTestFiles();
+createTestFiles();
 
 module.exports = {
-  createTestExcelFile,
-  createComplexExcelFile,
-  createWordTestFile,
-  createEmptyFiles,
-  createAllTestFiles
+  createTestFiles,
+  createExcelTestFile,
+  createLargeExcelFile,
+  createWordTestFile
 };
 
 

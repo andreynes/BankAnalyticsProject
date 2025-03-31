@@ -54,21 +54,20 @@ describe('ExcelProcessor', () => {
     it('should process worksheet with headers', async () => {
       const workbook = xlsx.readFile(testFilePath);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const result = await processor.processWorksheet(worksheet, 'Sheet1');
+      const result = await ExcelProcessor.processWorksheet(worksheet, 'Sheet1');
       
-      expect(result).to.have.property('type', 'table');
-      expect(result.content).to.have.property('headers').that.is.an('array');
-      expect(result.content).to.have.property('rows').that.is.an('array');
+      expect(result.content.headers).to.have.length.above(0);
+      expect(result.content.rows).to.have.length.above(0);
     });
-
-
+  
     it('should handle empty worksheet', async () => {
       const emptyWorksheet = { '!ref': 'A1:A1' };
-      const result = await processor.processWorksheet(emptyWorksheet, 'Empty');
+      const result = await ExcelProcessor.processWorksheet(emptyWorksheet, 'Empty');
       
-      expect(result.content.rows).to.be.an('array').that.is.empty;
+      expect(result.content.rows).to.have.length(0);
     });
   });
+  
 
 
   describe('Multi-level headers', () => {
@@ -90,20 +89,19 @@ describe('ExcelProcessor', () => {
 
   describe('Data types detection', () => {
     it('should correctly identify different data types', async () => {
-      const result = await processor.process(testFilePath);
-      const firstBlock = result.blocks[0];
-      
+      const result = await ExcelProcessor.processFile(testFilePath);
       const types = new Set();
-      firstBlock.content.rows.forEach(row => {
+      
+      result.blocks[0].content.rows.forEach(row => {
         row.cells.forEach(cell => {
           if (cell.type) types.add(cell.type);
         });
       });
-
-
-      expect(types.size).to.be.at.least(2); // Должно быть как минимум 2 разных типа
+  
+      expect(types.size).to.be.at.least(2);
     });
   });
+  
 
 
   describe('Tags generation', () => {

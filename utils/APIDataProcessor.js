@@ -17,11 +17,13 @@ class APIDataProcessor extends BaseDataProcessor {
    * @param {Object} metadata - Метаданные запроса
    * @returns {Promise<Object>} - Обработанные данные
    */
-  async process(apiData, metadata = {}) {
-    if (!apiData) {
-      throw new Error('Processing error: API data is required');
-    }
 
+async process(apiData, metadata = {}) {
+  if (!apiData) {
+    throw new Error('Processing error: API data is required');
+  }
+
+  try {
     const result = {
       fileName: `api_data_${Date.now()}`,
       documentType: 'api',
@@ -30,35 +32,64 @@ class APIDataProcessor extends BaseDataProcessor {
       blocks: [],
       metadata: {
         requestDate: new Date(),
-        ...metadata,
-        statistics: {
-          totalSize: JSON.stringify(apiData).length
-        }
+        ...metadata
       }
     };
 
-    try {
-      if (Array.isArray(apiData)) {
-        // Обработка массива данных
-        const block = await this.processArrayData(apiData);
-        result.blocks.push(block);
+    if (Array.isArray(apiData)) {
+      const block = await this.processArrayData(apiData);
+      result.blocks.push(block);
+      block.tags.forEach(tag => result.globalTags.add(tag));
+    } else {
+      const blocks = await this.processObjectData(apiData);
+      result.blocks.push(...blocks);
+      blocks.forEach(block => {
         block.tags.forEach(tag => result.globalTags.add(tag));
-      } else {
-        // Обработка объекта данных
-        const blocks = await this.processObjectData(apiData);
-        result.blocks.push(...blocks);
-        blocks.forEach(block => {
-          block.tags.forEach(tag => result.globalTags.add(tag));
-        });
-      }
-
-      result.globalTags = Array.from(result.globalTags);
-      return result;
-
-    } catch (error) {
-      throw new Error(`Processing error: ${error.message}`);
+      });
     }
+
+    result.globalTags = Array.from(result.globalTags);
+    return result;
+
+  } catch (error) {
+    if (error instanceof TypeError && error.message.includes('circular')) {
+      throw new Error('Processing error: Circular reference detected');
+    }
+    throw new Error(`Processing error: ${error.message}`);
   }
+}
+// utils/wordProcessor.js
+
+async processTextBlock(content) {
+  const isHeading = content.startsWith('Heading');
+  const formatting = {
+    bold: content.includes('**') || isHeading,
+    italic: content.includes('_'),
+    size: isHeading ? 'large' : 'normal',
+    alignment: this.determineAlignment(content)
+  };
+
+  return {
+    type: 'text',
+    content: {
+      text: content,
+      paragraphs: content.split('\n').filter(p => p.trim()),
+      isHeading,
+      formatting
+    },
+    tags: Array.from(this.extractTags(content))
+  };
+}
+
+
+determineAlignment(content) {
+  if (content.startsWith('>')) return 'right';
+  if (content.startsWith('<')) return 'left';
+  if (content.startsWith('|')) return 'center';
+  return 'left';
+}
+
+
 
   /**
    * Обработка массива данных
@@ -163,25 +194,31 @@ class APIDataProcessor extends BaseDataProcessor {
    * @param {Array} data - Массив данных
    * @returns {Set} - Набор тегов
    */
-  extractTagsFromArray(data) {
+  extractTagsFromObject(obj) {
     const tags = new Set();
-
-    if (data.length > 0) {
-      // Добавляем ключи как теги
-      Object.keys(data[0]).forEach(key => tags.add(key.toLowerCase()));
-
-      // Анализируем значения
-      data.forEach(item => {
-        Object.values(item).forEach(value => {
-          if (typeof value === 'string') {
-            this.extractTagsFromText(value).forEach(tag => tags.add(tag));
-          }
-        });
-      });
-    }
-
-    return tags;
+  
+    const processValue = (value, key) => {
+      // Добавляем ключ как тег
+      tags.add(key.toLowerCase());
+  
+      if (typeof value === 'string') {
+        this.extractTagsFromText(value).forEach(tag => tags.add(tag));
+      } else if (typeof value === 'number') {
+        // Проверяем, является ли число годом
+        if (value >= 1900 && value <= 2100) {
+          tags.add(value.toString());
+        }
+      } else if (Array.isArray(value)) {
+        value.forEach(v => processValue(v, key));
+      } else if (typeof value === 'object' && value !== null) {
+        Object.entries(value).forEach(([k, v]) => processValue(v, k));
+      }
+    };
+  
+    Object.entries(obj).forEach(([key, value]) => processValue(value, key));
+    return Array.from(tags);
   }
+  
 
   /**
    * Извлечение тегов из объекта

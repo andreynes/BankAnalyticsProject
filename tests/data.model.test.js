@@ -1,96 +1,84 @@
 // tests/data.model.test.js
 
-
-const Data = require('../models/Data');
+const Data = require('../models');
 const db = require('../config/db');
 const { expect } = require('chai');
-
+const { createTestData, createMultiBlockTestData } = require('./testDataCreation');
 
 describe('Data Model Test', () => {
-    before(async function() {
-      if (!process.env.MONGODB_URI) {
-        console.log('Skipping database tests - no MongoDB URI provided');
-        this.skip();
-      }
-      try {
-        await db.connect();
-      } catch (error) {
-        console.log('Failed to connect to MongoDB:', error.message);
-        this.skip();
-      }
-    });
-  
-
-
-  after(async function ()  {
+  before(async function() {
+    if (!process.env.MONGODB_URI) {
+      console.log('Skipping DB tests - no MongoDB URI provided');
+      this.skip();
+    }
     try {
-        await Data.deleteMany({});
-        await db.disconnect();
-    }   catch (error) {
-        console.warn('Warning: Error during cleanup:', error.message);
+      await db.connect();
+    } catch (error) {
+      console.log('Failed to connect to MongoDB:', error.message);
+      this.skip();
     }
   });
 
+  after(async function() {
+    try {
+      await Data.deleteMany({});
+      await db.disconnect();
+    } catch (error) {
+      console.warn('Cleanup error:', error.message);
+    }
+  });
 
   beforeEach(async () => {
     await Data.deleteMany({});
   });
 
-
   it('should validate valid data', async () => {
-    const validData = {
+    const testData = {
       fileName: 'test.xlsx',
       documentType: 'excel',
       companyName: 'Test Company',
-      dates: ['2023', '2024'],
-      indicators: ['Revenue', 'Profit'],
-      data: [{
-        rowNumber: 1,
-        indicator: 'Revenue',
-        values: {
-          '2023': 1000000,
-          '2024': 1200000
+      globalTags: ['test', '2023'],
+      blocks: [{
+        type: 'table',
+        source: 'excel',
+        content: {
+          headers: [{ value: 'Test', level: 1 }],
+          rows: [{
+            rowNumber: 1,
+            cells: new Map([['Test', { value: 'Value', type: 'text' }]])
+          }]
         },
-        tags: ['revenue', '2023', '2024']
+        tags: ['test']
       }],
       metadata: {
         format: 'yearly',
         statistics: {
           rowCount: 1,
-          columnCount: 2,
+          columnCount: 1,
           processedAt: new Date(),
           fileSize: 1024
-        },
-        tagging: {
-          tags: ['revenue', '2023', '2024'],
-          tagCount: 3
         }
       },
-      tags: ['revenue', '2023', '2024'],
       status: 'completed'
     };
 
-
-    const data = new Data(validData);
+    const data = new Data(testData);
     const savedData = await data.save();
     
     expect(savedData._id).to.exist;
     expect(savedData.fileName).to.equal('test.xlsx');
-    expect(savedData.companyName).to.equal('Test Company');
     expect(savedData.documentType).to.equal('excel');
+    expect(savedData.companyName).to.equal('Test Company');
+    expect(savedData.globalTags).to.include('2023');
     expect(savedData.status).to.equal('completed');
   });
-
 
   it('should fail for invalid data', async () => {
     const invalidData = {
       // Отсутствует обязательное поле fileName
-      companyName: 'Test Company',
       documentType: 'excel',
-      dates: ['2023'],
-      indicators: ['Revenue']
+      companyName: 'Test Company'
     };
-
 
     try {
       const data = new Data(invalidData);
@@ -99,104 +87,113 @@ describe('Data Model Test', () => {
     } catch (error) {
       expect(error).to.be.instanceOf(Error);
       expect(error.name).to.equal('ValidationError');
+      expect(error.message).to.include('fileName');
     }
   });
-
 
   it('should handle date formats correctly', async () => {
     const testData = {
       fileName: 'test.xlsx',
       documentType: 'excel',
       companyName: 'Test Company',
-      dates: ['01.2023', '02.2023', '2024'],
-      indicators: ['Revenue'],
-      data: [{
-        rowNumber: 1,
-        indicator: 'Revenue',
-        values: {
-          '01.2023': 1000000,
-          '02.2023': 1100000,
-          '2024': 1200000
-        }
+      globalTags: ['2023', '01.2023', '02.2023'],
+      blocks: [{
+        type: 'table',
+        source: 'excel',
+        content: {
+          headers: [{ value: 'Date', level: 1 }],
+          rows: [{
+            rowNumber: 1,
+            cells: new Map([
+              ['Date', { value: '01.2023', type: 'date' }]
+            ])
+          }]
+        },
+        tags: ['date']
       }],
       metadata: {
         format: 'monthly',
         statistics: {
           rowCount: 1,
-          columnCount: 3,
-          processedAt: new Date()
+          columnCount: 1,
+          processedAt: new Date(),
+          fileSize: 1024
         }
-      }
+      },
+      status: 'completed'
     };
-
 
     const data = new Data(testData);
     const savedData = await data.save();
-
-
     expect(savedData.metadata.format).to.equal('monthly');
-    expect(savedData.dates).to.include('01.2023');
-    expect(savedData.dates).to.include('2024');
+    expect(savedData.globalTags).to.include('01.2023');
   });
-
 
   it('should handle multiple data blocks', async () => {
     const testData = {
       fileName: 'test.xlsx',
       documentType: 'excel',
       companyName: 'Test Company',
-      dates: ['2023', '2024'],
-      indicators: ['Revenue', 'Profit'],
-      data: [
+      globalTags: ['test1', 'test2'],
+      blocks: [
         {
-          rowNumber: 1,
-          indicator: 'Revenue',
-          values: {
-            '2023': 1000000,
-            '2024': 1200000
-          }
+          type: 'table',
+          source: 'excel',
+          content: {
+            headers: [{ value: 'Test1', level: 1 }],
+            rows: [{
+              rowNumber: 1,
+              cells: new Map([['Test1', { value: 'Value1', type: 'text' }]])
+            }]
+          },
+          tags: ['test1']
         },
         {
-          rowNumber: 2,
-          indicator: 'Profit',
-          values: {
-            '2023': 300000,
-            '2024': 350000
-          }
+          type: 'table',
+          source: 'excel',
+          content: {
+            headers: [{ value: 'Test2', level: 1 }],
+            rows: [{
+              rowNumber: 1,
+              cells: new Map([['Test2', { value: 'Value2', type: 'text' }]])
+            }]
+          },
+          tags: ['test2']
         }
       ],
       metadata: {
         format: 'yearly',
         statistics: {
           rowCount: 2,
-          columnCount: 2,
-          processedAt: new Date()
+          columnCount: 1,
+          processedAt: new Date(),
+          fileSize: 1024
         }
-      }
+      },
+      status: 'completed'
     };
-
 
     const data = new Data(testData);
     const savedData = await data.save();
-
-
-    expect(savedData.data).to.have.lengthOf(2);
-    expect(savedData.indicators).to.include('Revenue');
-    expect(savedData.indicators).to.include('Profit');
+    expect(savedData.blocks).to.have.length(2);
+    expect(savedData.blocks[0].tags).to.include('test1');
+    expect(savedData.blocks[1].tags).to.include('test2');
   });
-
 
   it('should validate metadata structure', async () => {
     const testData = {
       fileName: 'test.xlsx',
       documentType: 'excel',
       companyName: 'Test Company',
-      dates: ['2023'],
-      indicators: ['Revenue'],
-      data: [{
-        rowNumber: 1,
-        indicator: 'Revenue',
-        values: { '2023': 1000000 }
+      globalTags: ['test'],
+      blocks: [{
+        type: 'table',
+        source: 'excel',
+        content: {
+          headers: [{ value: 'Test', level: 1 }],
+          rows: []
+        },
+        tags: ['test']
       }],
       metadata: {
         format: 'invalid_format', // Неверный формат
@@ -206,7 +203,6 @@ describe('Data Model Test', () => {
         }
       }
     };
-
 
     try {
       const data = new Data(testData);
@@ -219,18 +215,23 @@ describe('Data Model Test', () => {
     }
   });
 
-
   it('should handle empty values correctly', async () => {
     const testData = {
       fileName: 'test.xlsx',
       documentType: 'excel',
       companyName: 'Test Company',
-      dates: ['2023'],
-      indicators: ['Revenue'],
-      data: [{
-        rowNumber: 1,
-        indicator: 'Revenue',
-        values: { '2023': '' } // Пустое значение
+      globalTags: ['test'],
+      blocks: [{
+        type: 'table',
+        source: 'excel',
+        content: {
+          headers: [{ value: 'Test', level: 1 }],
+          rows: [{
+            rowNumber: 1,
+            cells: new Map([['Test', { value: '', type: 'empty' }]])
+          }]
+        },
+        tags: ['test']
       }],
       metadata: {
         format: 'yearly',
@@ -242,14 +243,12 @@ describe('Data Model Test', () => {
       }
     };
 
-
     const data = new Data(testData);
     const savedData = await data.save();
-
-
-    expect(savedData.data[0].values['2023']).to.equal('');
+    const firstCell = savedData.blocks[0].content.rows[0].cells.get('Test');
+    expect(firstCell.value).to.equal('');
+    expect(firstCell.type).to.equal('empty');
   });
-
 
   it('should update existing document', async () => {
     // Создаем исходный документ
@@ -257,12 +256,18 @@ describe('Data Model Test', () => {
       fileName: 'test.xlsx',
       documentType: 'excel',
       companyName: 'Test Company',
-      dates: ['2023'],
-      indicators: ['Revenue'],
-      data: [{
-        rowNumber: 1,
-        indicator: 'Revenue',
-        values: { '2023': 1000000 }
+      globalTags: ['test'],
+      blocks: [{
+        type: 'table',
+        source: 'excel',
+        content: {
+          headers: [{ value: 'Test', level: 1 }],
+          rows: [{
+            rowNumber: 1,
+            cells: new Map([['Test', { value: 'Initial', type: 'text' }]])
+          }]
+        },
+        tags: ['test']
       }],
       metadata: {
         format: 'yearly',
@@ -274,21 +279,22 @@ describe('Data Model Test', () => {
       }
     };
 
-
     const data = new Data(initialData);
     const savedData = await data.save();
 
-
     // Обновляем документ
     savedData.companyName = 'Updated Company';
-    savedData.data[0].values['2023'] = 1100000;
+    savedData.blocks[0].content.rows[0].cells.set('Test', { 
+      value: 'Updated', 
+      type: 'text' 
+    });
+    
     const updatedData = await savedData.save();
 
-
     expect(updatedData.companyName).to.equal('Updated Company');
-    expect(updatedData.data[0].values['2023']).to.equal(1100000);
+    expect(updatedData.blocks[0].content.rows[0].cells.get('Test').value)
+      .to.equal('Updated');
   });
 });
-
 
 

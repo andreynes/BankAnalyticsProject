@@ -1,42 +1,94 @@
-require('dotenv').config();
-const mongoose = require('mongoose');
-const Data = require('../models/Data');
+// tests/testDataCreation.js
 
-// Тестовые данные
-const testData = {
-    fileName: 'test_file.xlsx',
-    data: [{
-        row: new Map([
-            ['A1', 'Тестовое значение'],
-            ['B1', 123]
-        ]),
-        rowNumber: 1
-    }],
-    tags: ['Тест', 'Пример'],
-    metadata: {
-        sheetName: 'Лист1',
-        totalRows: 1,
-        totalColumns: 2,
-        fileSize: 1024
+const Data = require('../models');
+
+/**
+ * Создание тестовых данных для базы данных
+ * @param {Object} overrides - Переопределения значений по умолчанию
+ * @returns {Object} - Объект с тестовыми данными
+ */
+const createTestData = (overrides = {}) => ({
+  fileName: 'test.xlsx',
+  documentType: 'excel',
+  companyName: 'Test Company',
+  globalTags: ['test', '2023'],
+  blocks: [{
+    type: 'table',
+    source: 'excel',
+    content: {
+      headers: [{ value: 'Test', level: 1 }],
+      rows: [{
+        rowNumber: 1,
+        cells: new Map([['Test', { value: 'Value', type: 'text' }]])
+      }]
+    },
+    tags: ['test']
+  }],
+  metadata: {
+    format: 'yearly',
+    statistics: {
+      rowCount: 1,
+      columnCount: 1,
+      processedAt: new Date(),
+      fileSize: 1024
     }
+  },
+  status: 'completed',
+  ...overrides
+});
+
+/**
+ * Создание тестовых данных с несколькими блоками
+ * @param {number} blockCount - Количество блоков
+ * @returns {Object} - Объект с тестовыми данными
+ */
+const createMultiBlockTestData = (blockCount = 2) => {
+  const blocks = Array.from({ length: blockCount }, (_, index) => ({
+    type: 'table',
+    source: 'excel',
+    content: {
+      headers: [{ value: `Test${index + 1}`, level: 1 }],
+      rows: [{
+        rowNumber: 1,
+        cells: new Map([[`Test${index + 1}`, { value: `Value${index + 1}`, type: 'text' }]])
+      }]
+    },
+    tags: [`test${index + 1}`]
+  }));
+
+  return createTestData({ blocks });
 };
 
-// Функция для создания тестовой записи
-async function createTestRecord() {
-    try {
-        await mongoose.connect(process.env.MONGODB_URI);
-        console.log('Подключение к MongoDB успешно установлено');
+/**
+ * Сохранение тестовых данных в базу
+ * @param {Object} data - Данные для сохранения
+ * @returns {Promise<Object>} - Сохраненный документ
+ */
+const saveTestData = async (data = createTestData()) => {
+  const model = new Data(data);
+  return await model.save();
+};
 
-        const newData = new Data(testData);
-        const savedData = await newData.save();
-        console.log('Тестовая запись создана:', savedData);
+/**
+ * Создание набора тестовых данных
+ * @param {number} count - Количество документов
+ * @returns {Promise<Array>} - Массив сохраненных документов
+ */
+const createTestDataSet = async (count = 5) => {
+  const promises = Array.from({ length: count }, (_, index) => 
+    saveTestData(createTestData({
+      fileName: `test${index + 1}.xlsx`,
+      companyName: `Test Company ${index + 1}`
+    }))
+  );
+  return await Promise.all(promises);
+};
 
-        await mongoose.connection.close();
-        console.log('Подключение к MongoDB закрыто');
-    } catch (error) {
-        console.error('Ошибка:', error);
-    }
-}
+module.exports = {
+  createTestData,
+  createMultiBlockTestData,
+  saveTestData,
+  createTestDataSet
+};
 
-// Запускаем создание тестовой записи
-createTestRecord();
+

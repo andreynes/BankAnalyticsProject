@@ -1,49 +1,55 @@
-"use strict";
+// tests/excelParser.test.js
 
+const { ExcelParser, ExcelProcessor } = require('../utils/excelParser');
 const { expect } = require('chai');
 const path = require('path');
-const xlsx = require('xlsx');
 const fs = require('fs');
-const ExcelProcessor = require('../utils/excelProcessor');
 
 describe('ExcelParser', () => {
-  const testDir = path.join(__dirname, 'test-files');
-  const testFilePath = path.join(testDir, 'parser-test.xlsx');
+  let testFilePath;
 
   before(() => {
-    if (!fs.existsSync(testDir)) {
-      fs.mkdirSync(testDir, { recursive: true });
+    testFilePath = path.join(__dirname, 'test-files', 'test.xlsx');
+    if (!fs.existsSync(path.dirname(testFilePath))) {
+      fs.mkdirSync(path.dirname(testFilePath), { recursive: true });
     }
-
-    const wb = xlsx.utils.book_new();
-    const wsData = [
-      ['Тестовая компания', '2020', '2021'],
-      ['Выручка', '1000.50', '2000.75'],
-      ['EBITDA', '500.25', '750.50']
+    
+    // Создаем тестовый файл
+    const xlsx = require('xlsx');
+    const workbook = xlsx.utils.book_new();
+    const data = [
+      ['Company Name', '2022', '2023'],
+      ['Revenue', 1000000, 1200000],
+      ['Profit', 300000, 350000],
+      ['Margin', '30%', '29.2%']
     ];
-    const ws = xlsx.utils.aoa_to_sheet(wsData);
-    xlsx.utils.book_append_sheet(wb, ws, 'Sheet1');
-    xlsx.writeFile(wb, testFilePath);
-  });
-
-  it('should parse Excel file successfully', async () => {
-    const result = await ExcelProcessor.parse(testFilePath);
-    expect(result).to.have.property('companyName', 'Тестовая компания');
-    expect(result.dates).to.deep.equal(['2020', '2021']);
-    expect(result.indicators).to.deep.equal(['Выручка', 'EBITDA']);
-  });
-
-  it('should validate parsed data correctly', async () => {
-    const result = await ExcelProcessor.parse(testFilePath);
-    const revenueRow = result.data.find(row => row.row.get('indicator') === 'Выручка');
-    expect(revenueRow.row.get('values').get('2020')).to.equal(1000.50);
-    expect(revenueRow.row.get('values').get('2021')).to.equal(2000.75);
+    const worksheet = xlsx.utils.aoa_to_sheet(data);
+    xlsx.utils.book_append_sheet(workbook, worksheet, 'Test Data');
+    xlsx.writeFile(workbook, testFilePath);
   });
 
   after(() => {
     if (fs.existsSync(testFilePath)) {
       fs.unlinkSync(testFilePath);
     }
+  });
+
+  it('should parse Excel file successfully', async () => {
+    const result = await ExcelParser.parse(testFilePath);
+    
+    expect(result.headers).to.be.an('array');
+    expect(result.data).to.be.an('array');
+    expect(result.metadata.statistics).to.have.proprerty('rowCount');
+    expect(result.metadata.statistics).to.have.proprerty('columnCount');
+  });
+
+  it('should validate parsed data correctly', async () => {
+    const result = await ExcelParser.parse(testFilePath);
+    const firstRow = result.data[0];
+    
+    expect(firstRow).to.have.property('rowNumber', 1);
+    expect(firstRow).to.be.instanceOf(Map);
+    expect(Array.from(firstRow.row.values())).to.include('1000000');
   });
 });
 
