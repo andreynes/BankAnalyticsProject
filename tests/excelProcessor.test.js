@@ -89,7 +89,8 @@ describe('ExcelProcessor', () => {
 
   describe('Data types detection', () => {
     it('should correctly identify different data types', async () => {
-      const result = await ExcelProcessor.processFile(testFilePath);
+      const processor = new ExcelProcessor();
+      const result = await processor.process(testFilePath);
       const types = new Set();
       
       result.blocks[0].content.rows.forEach(row => {

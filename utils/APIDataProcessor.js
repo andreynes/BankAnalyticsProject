@@ -49,7 +49,7 @@ class APIDataProcessor extends BaseDataProcessor {
                 block.tags.forEach(tag => result.globalTags.add(tag));
                 result.metadata.statistics.processedBlocks++;
                 result.metadata.statistics.processedFields += apiData.length;
-            } else {
+            } else if (typeof apiData === 'object' && apiData !== null) {
                 const blocks = await this.processObjectData(apiData);
                 result.blocks.push(...blocks);
                 blocks.forEach(block => {
@@ -57,10 +57,12 @@ class APIDataProcessor extends BaseDataProcessor {
                     result.metadata.statistics.processedBlocks++;
                 });
                 result.metadata.statistics.processedFields += Object.keys(apiData).length;
+            } else {
+                throw new Error('Invalid API data format');
             }
 
             result.metadata.statistics.endTime = Date.now();
-            result.metadata.statistics.processingTime = 
+            result.metadata.statistics.processingTime =
                 result.metadata.statistics.endTime - result.metadata.statistics.startTime;
 
             result.globalTags = Array.from(result.globalTags);
@@ -80,7 +82,7 @@ class APIDataProcessor extends BaseDataProcessor {
      * @returns {Promise<Object>} - Блок данных
      */
     async processArrayData(data) {
-        if (!data.length) {
+        if (!Array.isArray(data) || !data.length) {
             return this.createEmptyBlock();
         }
 
@@ -122,6 +124,10 @@ class APIDataProcessor extends BaseDataProcessor {
      * @returns {Promise<Array>} - Массив блоков данных
      */
     async processObjectData(data) {
+        if (!data || typeof data !== 'object') {
+            return [this.createEmptyBlock()];
+        }
+
         const blocks = [];
         const flattenedData = this.flattenObject(data);
 
@@ -160,6 +166,65 @@ class APIDataProcessor extends BaseDataProcessor {
     }
 
     /**
+     * Определение типа данных
+     * @param {*} value - Значение для анализа
+     * @returns {string} - Тип данных
+     */
+    determineCellType(value) {
+        if (value === null || value === undefined) {
+            return 'empty';
+        }
+
+        if (value instanceof Date) {
+            return 'date';
+        }
+
+        // Если значение числовое
+        if (typeof value === 'number') {
+            return 'number';
+        }
+
+        const strValue = value.toString().trim();
+
+        // Проверка на валюту
+        if (/^[₽$€¥£]/.test(strValue)) {
+            return 'currency';
+        }
+
+        // Проверка на процент
+        if (/^-?\d+([.,]\d+)?%$/.test(strValue)) {
+            return 'percentage';
+        }
+
+        // Проверка на число
+        if (/^-?\d+([.,]\d+)?$/.test(strValue)) {
+            return 'number';
+        }
+
+        // Проверка на дату
+        if (
+            /^\d{4}-\d{2}-\d{2}/.test(strValue) ||
+            /^\d{2}[./-]\d{2}[./-]\d{4}$/.test(strValue) ||
+            /^\d{4}$/.test(strValue)
+        ) {
+            return 'date';
+        }
+
+        return 'text';
+    }
+
+    /**
+     * Проверка является ли значение числовым
+     * @param {*} value - Значение для проверки
+     * @returns {boolean} - Результат проверки
+     */
+    isNumeric(value) {
+        if (typeof value === 'number') return true;
+        if (typeof value !== 'string') return false;
+        return !isNaN(value) && !isNaN(parseFloat(value));
+    }
+
+    /**
      * Извлечение метаданных значения
      * @param {*} value - Значение для анализа
      * @returns {Object} - Метаданные значения
@@ -175,14 +240,16 @@ class APIDataProcessor extends BaseDataProcessor {
                     metadata.format = this.determineDateFormat(value);
                     break;
                 case 'number':
-                    metadata.precision = this.determineNumericPrecision(value);
-                    break;
-                case 'percentage':
-                    metadata.originalValue = parseFloat(value.toString().replace('%', '')) / 100;
-                    break;
                 case 'currency':
-                    metadata.currency = this.extractCurrencySymbol(value);
-                    metadata.originalValue = this.extractNumericValue(value);
+                case 'percentage':
+                    metadata.precision = this.determineNumericPrecision(value);
+                    if (type === 'currency') {
+                        metadata.currency = this.extractCurrencySymbol(value);
+                        metadata.originalValue = this.extractNumericValue(value);
+                    }
+                    if (type === 'percentage') {
+                        metadata.originalValue = parseFloat(value.toString().replace('%', '')) / 100;
+                    }
                     break;
             }
         }
@@ -192,16 +259,14 @@ class APIDataProcessor extends BaseDataProcessor {
 
     /**
      * Генерация тегов для значения
-     * @param {*} value - Значение
-     * @param {string} key - Ключ
-     * @param {string} type - Тип данных
-     * @returns {Array} - Массив тегов
      */
     generateValueTags(value, key, type) {
         const tags = new Set();
         
         // Добавляем ключ как тег
-        tags.add(key.toLowerCase());
+        if (key) {
+            tags.add(key.toLowerCase());
+        }
 
         // Обработка значения в зависимости от типа
         if (type === 'date') {
@@ -242,249 +307,236 @@ class APIDataProcessor extends BaseDataProcessor {
      * @returns {Set} - Набор тегов
      */
     extractTagsFromArray(data) {
-        const tags = new Set();
-        
-        data.forEach(item => {
-            Object.entries(item).forEach(([key, value]) => {
-                tags.add(key.toLowerCase());
-                
-                if (typeof value === 'string') {
-                    this.extractTagsFromText(value).forEach(tag => tags.add(tag));
-                } else if (typeof value === 'number') {
-                    if (value >= 1900 && value <= 2100) {
-                        tags.add(value.toString());
-                    }
-                }
-            });
-        });
+      const tags = new Set();
+      
+      if (!Array.isArray(data)) {
+          return tags;
+      }
 
-        return tags;
-    }
+      data.forEach(item => {
+          if (typeof item === 'object' && item !== null) {
+              Object.entries(item).forEach(([key, value]) => {
+                  if (key) {
+                      tags.add(key.toLowerCase());
+                  }
+                  
+                  if (typeof value === 'string') {
+                      this.extractTagsFromText(value).forEach(tag => tags.add(tag));
+                  } else if (typeof value === 'number') {
+                      if (value >= 1900 && value <= 2100) {
+                          tags.add(value.toString());
+                      }
+                  }
+              });
+          }
+      });
 
-    /**
-     * Извлечение тегов из объекта
-     * @param {Object} obj - Объект для анализа
-     * @param {string} parentKey - Родительский ключ
-     * @returns {Array} - Массив тегов
-     */
-    extractTagsFromObject(obj, parentKey = '') {
-        const tags = new Set();
-        
-        const processValue = (value, key) => {
-            if (key) {
-                tags.add(key.toLowerCase());
-                if (parentKey) {
-                    tags.add(`${parentKey}.${key}`.toLowerCase());
-                }
-            }
+      return tags;
+  }
 
-            if (typeof value === 'string') {
-                const years = value.match(/\b(19|20)\d{2}\b/g);
-                if (years) {
-                    years.forEach(year => tags.add(year));
-                }
+  /**
+   * Извлечение тегов из объекта
+   * @param {Object} obj - Объект для анализа
+   * @param {string} parentKey - Родительский ключ
+   * @returns {Array} - Массив тегов
+   */
+  extractTagsFromObject(obj, parentKey = '') {
+      const tags = new Set();
+      
+      if (!obj || typeof obj !== 'object') {
+          return Array.from(tags);
+      }
 
-                const words = value.match(/\b[A-ZА-Я][a-zа-я]{2,}\b/g);
-                if (words) {
-                    words.forEach(word => tags.add(word.toLowerCase()));
-                }
+      const processValue = (value, key) => {
+          if (key) {
+              tags.add(key.toLowerCase());
+              if (parentKey) {
+                  tags.add(`${parentKey}.${key}`.toLowerCase());
+              }
+          }
 
-                const metrics = ['revenue', 'profit', 'margin', 'growth', 'sales'];
-                metrics.forEach(metric => {
-                    if (value.toLowerCase().includes(metric)) {
-                        tags.add(metric);
-                    }
-                });
-            } else if (typeof value === 'number') {
-                if (value >= 1900 && value <= 2100) {
-                    tags.add(value.toString());
-                }
-            } else if (Array.isArray(value)) {
-                value.forEach(v => processValue(v, key));
-            } else if (typeof value === 'object' && value !== null) {
-                Object.entries(value).forEach(([k, v]) => 
-                    processValue(v, parentKey ? `${parentKey}.${k}` : k)
-                );
-            }
-        };
+          if (typeof value === 'string') {
+              const years = value.match(/\b(19|20)\d{2}\b/g);
+              if (years) {
+                  years.forEach(year => tags.add(year));
+              }
 
-        processValue(obj, parentKey);
-        return Array.from(tags);
-    }
+              const words = value.match(/\b[A-ZА-Я][a-zа-я]{2,}\b/g);
+              if (words) {
+                  words.forEach(word => tags.add(word.toLowerCase()));
+              }
 
-    /**
-     * Извлечение тегов из текста
-     * @param {string} text - Текст для анализа
-     * @returns {Set} - Набор тегов
-     */
-    extractTagsFromText(text) {
-        const tags = new Set();
+              const metrics = ['revenue', 'profit', 'margin', 'growth', 'sales'];
+              metrics.forEach(metric => {
+                  if (value.toLowerCase().includes(metric)) {
+                      tags.add(metric);
+                  }
+              });
+          } else if (typeof value === 'number') {
+              if (value >= 1900 && value <= 2100) {
+                  tags.add(value.toString());
+              }
+          } else if (Array.isArray(value)) {
+              value.forEach(v => processValue(v, key));
+          } else if (typeof value === 'object' && value !== null) {
+              Object.entries(value).forEach(([k, v]) =>
+                  processValue(v, parentKey ? `${parentKey}.${k}` : k)
+              );
+          }
+      };
 
-        if (!text) return tags;
+      processValue(obj, parentKey);
+      return Array.from(tags);
+  }
 
-        // Извлекаем годы
-        const years = text.toString().match(/\b(19|20)\d{2}\b/g);
-        if (years) {
-            years.forEach(year => tags.add(year));
-        }
+  /**
+   * Извлечение тегов из текста
+   * @param {string} text - Текст для анализа
+   * @returns {Set} - Набор тегов
+   */
+  extractTagsFromText(text) {
+      const tags = new Set();
 
-        // Извлекаем ключевые слова
-        const words = text.toString().match(/\b[A-ZА-Я][a-zа-я]{2,}\b/g);
-        if (words) {
-            words.forEach(word => tags.add(word.toLowerCase()));
-        }
+      if (!text) return tags;
 
-        return tags;
-    }
+      const strValue = text.toString();
 
-    /**
-     * Определение формата даты
-     * @param {*} value - Значение для анализа
-     * @returns {string} - Формат даты
-     */
-    determineDateFormat(value) {
-        if (!value) return 'unknown';
-        
-        const strValue = value.toString();
-        
-        if (/^\d{4}$/.test(strValue)) {
-            return 'yearly';
-        }
-        
-        if (/^\d{2}[./-]\d{4}$/.test(strValue)) {
-            return 'monthly';
-        }
-        
-        if (/^\d{2}[./-]\d{2}[./-]\d{4}$/.test(strValue) ||
-            /^\d{4}-\d{2}-\d{2}/.test(strValue)) {
-            return 'daily';
-        }
-        
-        return 'unknown';
-    }
+      // Извлекаем годы
+      const years = strValue.match(/\b(19|20)\d{2}\b/g);
+      if (years) {
+          years.forEach(year => tags.add(year));
+      }
 
-    /**
-     * Определение точности числа
-     * @param {number} value - Число для анализа
-     * @returns {number} - Количество десятичных знаков
-     */
-    determineNumericPrecision(value) {
-        if (typeof value !== 'number') return 0;
-        const str = value.toString();
-        const decimals = str.includes('.') ? str.split('.')[1].length : 0;
-        return decimals;
-    }
+      // Извлекаем ключевые слова
+      const words = strValue.match(/\b[A-ZА-Я][a-zа-я]{2,}\b/g);
+      if (words) {
+          words.forEach(word => tags.add(word.toLowerCase()));
+      }
 
-    /**
-     * Извлечение символа валюты
-     * @param {string} value - Строка для анализа
-     * @returns {string} - Символ валюты
-     */
-    extractCurrencySymbol(value) {
-        const match = value.toString().match(/^([₽$€¥£])/);
-        return match ? match[1] : '';
-    }
+      return tags;
+  }
 
-    /**
-     * Извлечение числового значения
-     * @param {string} value - Строка для анализа
-     * @returns {number} - Числовое значение
-     */
-    extractNumericValue(value) {
-        return parseFloat(value.toString().replace(/[^-0-9.,]/g, '').replace(',', '.'));
-    }
+  /**
+   * Определение формата даты
+   * @param {*} value - Значение для анализа
+   * @returns {string} - Формат даты
+   */
+  determineDateFormat(value) {
+      if (!value) return 'unknown';
+      
+      const strValue = value.toString();
+      
+      if (/^\d{4}$/.test(strValue)) {
+          return 'yearly';
+      }
+      
+      if (/^\d{2}[./-]\d{4}$/.test(strValue)) {
+          return 'monthly';
+      }
+      
+      if (/^\d{2}[./-]\d{2}[./-]\d{4}$/.test(strValue) ||
+          /^\d{4}-\d{2}-\d{2}/.test(strValue)) {
+          return 'daily';
+      }
+      
+      return 'unknown';
+  }
 
-    /**
-     * Создание пустого блока
-     * @returns {Object} - Пустой блок данных
-     */
-    createEmptyBlock() {
-        return {
-            type: 'table',
-            source: 'api',
-            content: {
-                headers: [],
-                rows: []
-            },
-            tags: []
-        };
-    }
+  /**
+   * Определение точности числа
+   * @param {number} value - Число для анализа
+   * @returns {number} - Количество десятичных знаков
+   */
+  determineNumericPrecision(value) {
+      if (!this.isNumeric(value)) return 0;
+      const str = value.toString();
+      const decimals = str.includes('.') ? str.split('.')[1].length : 0;
+      return decimals;
+  }
 
-    /**
-     * Преобразование вложенного объекта в плоскую структуру
-     * @param {Object} obj - Объект для преобразования
-     * @returns {Object} - Плоская структура
-     */
+  /**
+   * Извлечение символа валюты
+   * @param {string} value - Строка для анализа
+   * @returns {string} - Символ валюты
+   */
+  extractCurrencySymbol(value) {
+      if (!value) return '';
+      const match = value.toString().match(/^([₽$€¥£])/);
+      return match ? match[1] : '';
+  }
 
-    getValueByPath(obj, path) {
+  /**
+   * Извлечение числового значения
+   * @param {string} value - Строка для анализа
+   * @returns {number} - Числовое значение
+   */
+  extractNumericValue(value) {
+      if (!value) return 0;
+      const numStr = value.toString().replace(/[^-0-9.,]/g, '').replace(',', '.');
+      return parseFloat(numStr) || 0;
+  }
+
+  /**
+   * Создание пустого блока
+   * @returns {Object} - Пустой блок данных
+   */
+  createEmptyBlock() {
+      return {
+          type: 'table',
+          source: 'api',
+          content: {
+              headers: [],
+              rows: []
+          },
+          tags: []
+      };
+  }
+
+  /**
+   * Получение значения по пути в объекте
+   * @param {Object} obj - Объект
+   * @param {string} path - Путь к значению
+   * @returns {*} - Значение
+   */
+  getValueByPath(obj, path) {
+      if (!obj || !path) return undefined;
       return path.split('.').reduce((current, key) => {
           return current && typeof current === 'object' ? current[key] : undefined;
       }, obj);
-    }
-  
-    flattenObject(obj) {
-        const result = {};
-        
-        function recurse(current, prop) {
-            if (Array.isArray(current)) {
-                result[prop] = current;
-            } else if (typeof current === 'object' && current !== null) {
-                for (const p in current) {
-                    const newProp = prop ? `${prop}.${p}` : p;
-                    if (typeof current[p] === 'object' && !Array.isArray(current[p])) {
-                        recurse(current[p], newProp);
-                    } else {
-                        result[newProp] = current[p];
-                    }
-                }
-            } else {
-                result[prop] = current;
-            }
-        }
-        
-        recurse(obj, '');
-        return result;
-    }
+  }
 
-    /**
-     * Определение типа данных
-     * @param {*} value - Значение для анализа
-     * @returns {string} - Тип данных
-     */
-    determineCellType(value) {
-        if (value === null || value === undefined) {
-            return 'empty';
-        }
+  /**
+   * Преобразование вложенного объекта в плоскую структуру
+   * @param {Object} obj - Объект для преобразования
+   * @returns {Object} - Плоская структура
+   */
+  flattenObject(obj) {
+      if (!obj || typeof obj !== 'object') {
+          return {};
+      }
 
-        if (value instanceof Date) {
-            return 'date';
-        }
-
-        const strValue = value.toString().trim();
-
-        // Проверка на валюту
-        if (/^[$€₽¥£]?\s*-?\d+([.,]\d+)?([kmbt])?$/i.test(strValue)) {
-            return 'currency';
-        }
-
-        // Проверка на процент
-        if (/^-?\d+([.,]\d+)?%$/.test(strValue)) {
-            return 'percentage';
-        }
-
-        // Проверка на дату
-        if (/^\d{4}-\d{2}-\d{2}/.test(strValue) ||
-            /^\d{2}[./-]\d{2}[./-]\d{4}$/.test(strValue)) {
-            return 'date';
-        }
-
-        // Проверка на число
-        if (/^-?\d+([.,]\d+)?$/.test(strValue)) {
-            return 'number';
-        }
-
-        return 'text';
-    }
+      const result = {};
+      
+      function recurse(current, prop) {
+          if (Array.isArray(current)) {
+              result[prop] = current;
+          } else if (typeof current === 'object' && current !== null) {
+              for (const p in current) {
+                  const newProp = prop ? `${prop}.${p}` : p;
+                  if (typeof current[p] === 'object' && !Array.isArray(current[p])) {
+                      recurse(current[p], newProp);
+                  } else {
+                      result[newProp] = current[p];
+                  }
+              }
+          } else {
+              result[prop] = current;
+          }
+      }
+      
+      recurse(obj, '');
+      return result;
+  }
 }
 
 module.exports = APIDataProcessor;
