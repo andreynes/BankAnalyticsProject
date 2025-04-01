@@ -1,106 +1,208 @@
-// routes/upload.js
-
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
 const ExcelProcessor = require('../utils/excelProcessor');
+const Data = require('../models/Data');
 
-// Конфигурация multer для загрузки файлов
+// Настройка хранилища для multer
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
+    destination: function (req, file, cb) {
         cb(null, 'uploads/');
     },
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + '-' + file.originalname);
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now();
+        cb(null, uniqueSuffix + '-' + file.originalname);
     }
 });
 
-// Фильтр файлов
+// Настройка фильтра файлов
 const fileFilter = (req, file, cb) => {
-    const allowedTypes = ['.xlsx', '.xls', '.csv'];
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (allowedTypes.includes(ext)) {
+    const allowedTypes = [
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
+        'application/vnd.ms-excel', // xls
+        'text/csv' // csv
+    ];
+
+    if (allowedTypes.includes(file.mimetype)) {
         cb(null, true);
     } else {
-        cb(new Error('Invalid file type'), false);
+        cb(new Error('Неподдерживаемый тип файла. Разрешены только Excel файлы (xlsx, xls) и CSV.'), false);
     }
 };
 
+// Настройка multer
 const upload = multer({
     storage: storage,
     fileFilter: fileFilter,
     limits: {
-        fileSize: 16 * 1024 * 1024 // 16MB
+        fileSize: 10 * 1024 * 1024 // 10MB лимит
     }
 });
 
+// Маршрут для загрузки файла
 router.post('/', upload.single('file'), async (req, res) => {
+    console.log('Получен файл:', req.file);
+    console.log('Тело запроса:', req.body);
+    
     try {
         if (!req.file) {
-            return res.status(400).json({ error: 'No file uploaded' });
-        }
-
-        const processor = new ExcelProcessor();
-        const result = await processor.process(req.file.path);
-
-        // Добавляем метаданные файла
-        result.metadata = {
-            ...result.metadata,
-            fileInfo: {
-                ...result.metadata.fileInfo,
-                fileSize: req.file.size,
-                fileName: req.file.originalname,
-                mimeType: req.file.mimetype,
-                uploadDate: new Date()
-            }
-        };
-
-        // Обеспечиваем наличие тегов
-        if (!result.tags) {
-            result.tags = [];
-        }
-
-        // Добавляем базовые теги
-        const year = new Date().getFullYear().toString();
-        if (!result.tags.includes(year)) {
-            result.tags.push(year);
-        }
-
-        // Добавляем бизнес-метрики в теги
-        const metrics = ['revenue', 'profit', 'margin', 'growth', 'sales'];
-        metrics.forEach(metric => {
-            if (JSON.stringify(result).toLowerCase().includes(metric) && !result.tags.includes(metric)) {
-                result.tags.push(metric);
-            }
-        });
-
-        // Очистка временного файла
-        fs.unlink(req.file.path, (err) => {
-            if (err) console.error('Error deleting temp file:', err);
-        });
-
-        res.status(200).json(result);
-    } catch (error) {
-        // Очистка временного файла в случае ошибки
-        if (req.file) {
-            fs.unlink(req.file.path, (err) => {
-                if (err) console.error('Error deleting temp file:', err);
+            return res.status(400).json({
+                success: false,
+                error: 'Файл не был загружен',
+                details: 'Файл отсутствует в запросе'
             });
         }
 
-        if (error.message.includes('File too large')) {
-            return res.status(413).json({ error: 'File too large' });
-        }
+        // Создаем экземпляр процессора Excel
+        const processor = new ExcelProcessor();
+        
+        // Обрабатываем файл
+        console.log('Processing file:', req.file.path);
+        const processedData = await processor.processFile(req.file.path);
+        
+        // Извлекаем название компании из имени файла
+        const companyName = extractCompanyName(req.file.originalname);
 
-        if (error.message.includes('Invalid file type')) {
-            return res.status(400).json({ error: 'Invalid file type' });
-        }
+        // Создаем блоки данных
+        const blocks = processedData.data.map((sheet, index) => ({
+            blockId: `block_${index}`,
+            type: 'table',
+            source: {
+                type: 'excel',
+                details: new Map([
+                    ['sheetName', sheet.sheetName],
+                    ['sheetIndex', index]
+                ])
+            },
+            content: {
+                headers: sheet.headers,
+                rows: sheet.rows
+            },
+            tags: [...processedData.tags], // Добавляем теги к каждому блоку
+            metadata: {
+                rowCount: sheet.rows.length,
+                columnCount: sheet.headers.length,
+                hasFormulas: false,
+                dateFormat: 'YYYY-MM-DD',
+                numberFormat: 'general'
+            }
+        }));
 
-        console.error('Upload error:', error);
-        res.status(500).json({ error: error.message });
+        // Создаем запись в базе данных
+        const dataDocument = new Data({
+            fileName: req.file.originalname,
+            filePath: req.file.path,
+            uploadDate: new Date(),
+            companyName: companyName,
+            documentType: 'excel',
+            globalTags: processedData.tags,
+            blocks: blocks,
+            metadata: {
+                format: determineDataFormat(processedData),
+                statistics: {
+                    totalBlocks: blocks.length,
+                    totalRows: processedData.metadata.totalRows,
+                    processedAt: new Date(),
+                    fileSize: req.file.size
+                },
+                source: {
+                    type: 'excel',
+                    mimeType: req.file.mimetype,
+                    originalName: req.file.originalname
+                }
+            },
+            status: 'complete'
+        });
+
+        // Сохраняем в базу данных
+        await dataDocument.save();
+
+        // Отправляем успешный ответ
+        res.status(200).json({
+            success: true,
+            message: 'Файл успешно загружен и обработан',
+            file: {
+                id: dataDocument._id,
+                filename: req.file.filename,
+                originalname: req.file.originalname,
+                size: req.file.size,
+                path: req.file.path
+            },
+            data: {
+                companyName: companyName,
+                blocks: blocks.length,
+                totalRows: processedData.metadata.totalRows,
+                tags: processedData.tags
+            },
+            metadata: {
+                processedAt: new Date(),
+                status: 'complete'
+            }
+        });
+
+    } catch (error) {
+        console.error('Ошибка при обработке файла:', error);
+        
+        // Отправляем ответ с ошибкой
+        res.status(500).json({
+            success: false,
+            error: 'Ошибка при обработке файла',
+            details: error.message,
+            metadata: {
+                processedAt: new Date(),
+                status: 'failed'
+            }
+        });
     }
+});
+
+// Вспомогательные функции
+function extractCompanyName(filename) {
+    // Удаляем расширение и специальные символы
+    return filename
+        .replace(/\.[^/.]+$/, "") // удаляем расширение
+        .replace(/[_-]/g, " ") // заменяем подчеркивания и дефисы на пробелы
+        .replace(/\d+$/, "") // удаляем цифры в конце
+        .trim();
+}
+
+function determineDataFormat(processedData) {
+    // Пытаемся определить формат по заголовкам
+    const headers = processedData.data[0]?.headers || [];
+    const headerValues = headers.map(h => h.value || '').join(' ').toLowerCase();
+    
+    if (headerValues.includes('год')) return 'yearly';
+    if (headerValues.includes('месяц')) return 'monthly';
+    if (headerValues.includes('день') || headerValues.includes('дата')) return 'daily';
+    
+    return 'unknown';
+}
+
+// Обработка ошибок multer
+router.use((error, req, res, next) => {
+    if (error instanceof multer.MulterError) {
+        if (error.code === 'LIMIT_FILE_SIZE') {
+            return res.status(400).json({
+                success: false,
+                error: 'Файл слишком большой',
+                details: 'Максимальный размер файла - 10MB'
+            });
+        }
+        if (error.code === 'LIMIT_UNEXPECTED_FILE') {
+            return res.status(400).json({
+                success: false,
+                error: 'Неверное имя поля для файла',
+                details: 'Используйте поле "file" для загрузки'
+            });
+        }
+    }
+    
+    return res.status(500).json({
+        success: false,
+        error: 'Ошибка при загрузке файла',
+        details: error.message
+    });
 });
 
 module.exports = router;

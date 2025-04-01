@@ -83,10 +83,8 @@ backend/
 │   ├── test-files/
 │   │   ├── api-test-data.json
 │   │   ├── empty.xlsx
-│   │   ├── multi-level.xlsx
 │   │   ├── sample.xlsx
-│   │   ├── test.txt
-│   │   └── test.xlsx
+│   │   └── test.txt
 │   ├── testDataCreation.js
 │   ├── upload.test.js
 │   ├── utils/
@@ -95,42 +93,6 @@ backend/
 │   └── wordProcessor.test.js
 ├── updateArchitecture.py
 ├── uploads/
-│   ├── 1742977335596-sample.xlsx
-│   ├── 1742986079696-sample.xlsx
-│   ├── 1742986081255-sample.xlsx
-│   ├── 1742986801266-sample.xlsx
-│   ├── 1742986803649-sample.xlsx
-│   ├── 1742987054529-sample.xlsx
-│   ├── 1742987056317-sample.xlsx
-│   ├── 1742987239327-sample.xlsx
-│   ├── 1742987241056-sample.xlsx
-│   ├── 1742987740008-sample.xlsx
-│   ├── 1742987741681-sample.xlsx
-│   ├── 1742987911007-sample.xlsx
-│   ├── 1742987913595-sample.xlsx
-│   ├── 1742988182339-sample.xlsx
-│   ├── 1742988184715-sample.xlsx
-│   ├── 1742988370955-sample.xlsx
-│   ├── 1742988372901-sample.xlsx
-│   ├── 1742988523740-sample.xlsx
-│   ├── 1742988525698-sample.xlsx
-│   ├── 1742988744063-sample.xlsx
-│   ├── 1742988746200-sample.xlsx
-│   ├── 1742988996713-sample.xlsx
-│   ├── 1742988998317-sample.xlsx
-│   ├── 1742989127563-sample.xlsx
-│   ├── 1742989130348-sample.xlsx
-│   ├── 1742989399275-sample.xlsx
-│   ├── 1742989400885-sample.xlsx
-│   ├── 1743007131547-Газпром.xlsx
-│   ├── 1743060456351-Газпром.xlsx
-│   ├── 1743063483329-Газпром.xlsx
-│   ├── 1743063840358-Газпром.xlsx
-│   ├── 1743072439486-Газпром2.xlsx
-│   ├── 1743182368442-invalid.txt
-│   ├── 1743407655003-invalid.txt
-│   ├── 1743418176695-too-large.xlsx
-│   └── 1743418180051-too-large.xlsx
 ├── utils/
 │   ├── APIDataProcessor.js
 │   ├── autoTagger.js
@@ -192,7 +154,7 @@ backend/
   - Function: **sanitize**
 - **Файл**: server.js (язык: js)
   - File_imports: **server.js**
-    - *Импорты:* ./config/db, ./routes/search, ./routes/upload
+    - *Импорты:* ./routes/search, ./config/db, ./routes/upload
 - **Файл**: test-autoTagger.js (язык: js)
   - File_imports: **test-autoTagger.js**
     - *Импорты:* ./utils/autoTagger
@@ -273,7 +235,7 @@ backend/
 - **Файл**: taskpane.html (язык: html)
   - Html: **taskpane.html**
     - *Описание:* HTML файл
-    - *Импорты:* taskpane.css, taskpane.js
+    - *Импорты:* taskpane.js, taskpane.css
 
 ### Папка: config
 Содержимые файлы:
@@ -301,7 +263,7 @@ backend/
 **Детали по файлам:**
 - **Файл**: upload.js (язык: js)
   - File_imports: **upload.js**
-    - *Импорты:* ../utils/excelProcessor, ../models
+    - *Импорты:* ../utils/excelProcessor
 - **Файл**: search.js (язык: js)
   - File_imports: **search.js**
     - *Импорты:* ../models/Data
@@ -373,7 +335,7 @@ backend/
     - *Метод:* looksLikePercentage
 - **Файл**: upload.test.js (язык: js)
   - File_imports: **upload.test.js**
-    - *Импорты:* ../models, ../server, ../config/db
+    - *Импорты:* ../config/db, ../server, ../models
 - **Файл**: excelParser.test.js (язык: js)
   - File_imports: **excelParser.test.js**
     - *Импорты:* ../utils/excelParser
@@ -393,7 +355,7 @@ backend/
     - *Импорты:* ../../utils/excelProcessor
 - **Файл**: upload.integration.test.js (язык: js)
   - File_imports: **upload.integration.test.js**
-    - *Импорты:* ../../server, ../utils/createTestFiles, ../../config/db, ../../models
+    - *Импорты:* ../../config/db, ../utils/createTestFiles, ../../server
 - **Файл**: fileProcessing.test.js (язык: js)
   - File_imports: **fileProcessing.test.js**
     - *Импорты:* ../../utils/excelProcessor
@@ -402,10 +364,8 @@ backend/
 Содержимые файлы:
 - api-test-data.json
 - empty.xlsx
-- multi-level.xlsx
 - sample.xlsx
 - test.txt
-- test.xlsx
 
 ### Папка: tests/utils
 Содержимые файлы:
@@ -414,49 +374,13 @@ backend/
 
 **Детали по файлам:**
 - **Файл**: createTestFiles.js (язык: js)
-  - Function: **createExcelTestFile**
-    - *Описание:* tests/utils/createTestFiles.js * Создание тестового Excel файла * @param {string} filePath - Путь для сохранения файла
-  - Function: **createLargeExcelFile**
-    - *Описание:* Создаем данные для листа Добавляем второй лист с другой структурой * Создание большого тестового Excel файла * @param {string} filePath - Путь для сохранения файла
+  - Function: **createTextFile**
+    - *Описание:* tests/utils/createTestFiles.js * Создание тестового Excel файла * @param {string} filePath - Путь для сохранения файла * @param {Object} options - Опции для создания файла * @returns {Promise<void>} Настройка базовых параметров Создание основного листа Добавление метаданных Настройка форматирования Форматирование заголовков Форматирование чисел Форматирование дат Добавление объединенных ячеек если указано Установка ширины столбцов Добавление основного листа Создание дополнительных листов для больших файлов Создаем множество листов для увеличения размера файла Добавление листа с мультизаголовками если указано Создание директории если не существует Сохранение файла * Создание тестового текстового файла * @param {string} filePath - Путь для сохранения файла * @param {string} content - Содержимое файла
+  - Function: **createLargeFile**
+    - *Описание:* * Создание большого тестового файла * @param {string} filePath - Путь для сохранения файла * @param {number} sizeInMB - Размер файла в мегабайтах
 
 ### Папка: uploads
-Содержимые файлы:
-- 1742977335596-sample.xlsx
-- 1742986079696-sample.xlsx
-- 1742986081255-sample.xlsx
-- 1742986801266-sample.xlsx
-- 1742986803649-sample.xlsx
-- 1742987054529-sample.xlsx
-- 1742987056317-sample.xlsx
-- 1742987239327-sample.xlsx
-- 1742987241056-sample.xlsx
-- 1742987740008-sample.xlsx
-- 1742987741681-sample.xlsx
-- 1742987911007-sample.xlsx
-- 1742987913595-sample.xlsx
-- 1742988182339-sample.xlsx
-- 1742988184715-sample.xlsx
-- 1742988370955-sample.xlsx
-- 1742988372901-sample.xlsx
-- 1742988523740-sample.xlsx
-- 1742988525698-sample.xlsx
-- 1742988744063-sample.xlsx
-- 1742988746200-sample.xlsx
-- 1742988996713-sample.xlsx
-- 1742988998317-sample.xlsx
-- 1742989127563-sample.xlsx
-- 1742989130348-sample.xlsx
-- 1742989399275-sample.xlsx
-- 1742989400885-sample.xlsx
-- 1743007131547-Газпром.xlsx
-- 1743060456351-Газпром.xlsx
-- 1743063483329-Газпром.xlsx
-- 1743063840358-Газпром.xlsx
-- 1743072439486-Газпром2.xlsx
-- 1743182368442-invalid.txt
-- 1743407655003-invalid.txt
-- 1743418176695-too-large.xlsx
-- 1743418180051-too-large.xlsx
+*(Нет файлов)*
 
 ### Папка: utils
 Содержимые файлы:
@@ -474,8 +398,8 @@ backend/
 - **Файл**: wordProcessor.js (язык: js)
   - Class: **WordProcessor**
     - *Описание:* utils/wordProcessor.js
-    - *Поля:* filePath, filePath
     - *Метод:* constructor
+    - *Метод:* transformDocument
     - *Метод:* getHeadingLevel
     - *Метод:* determineTextSize
     - *Метод:* determineAlignment
@@ -491,9 +415,26 @@ backend/
 - **Файл**: excelProcessor.js (язык: js)
   - Class: **ExcelProcessor**
     - *Описание:* utils/excelProcessor.js
+    - *Поля:* value
     - *Метод:* constructor
+    - *Метод:* processHeaders
+    - *Метод:* processValue
+    - *Метод:* processRows
+    - *Метод:* determineDateFormat
+    - *Метод:* determineNumericPrecision
+    - *Метод:* extractMetadata
+    - *Метод:* processFormula
+    - *Метод:* isEmptyRow
+    - *Метод:* hasFormulas
+    - *Метод:* getRowTypes
+    - *Метод:* analyzeColumnTypes
+    - *Метод:* generateTags
+    - *Метод:* getDominantType
+    - *Метод:* countEmptyRows
+    - *Метод:* calculateDataCoverage
+    - *Метод:* analyzeTypeDistribution
   - File_imports: **excelProcessor.js**
-    - *Импорты:* ./baseDataProcessor
+    - *Импорты:* ./excelParser
 - **Файл**: autoTagger.js (язык: js)
   - Class: **AutoTagger**
     - *Метод:* constructor
@@ -515,14 +456,30 @@ backend/
     - *Метод:* cleanup
 - **Файл**: excelParser.js (язык: js)
   - Function: **sanitize**
-    - *Описание:* * Улучшенная функция sanitize * @param {*} cell - Значение ячейки для очистки * @returns {string|number} - Очищенное значение
+    - *Описание:* * Улучшенная функция sanitize * @param {*} cell - Значение ячейки для очистки * @param {ExcelParser} parser - Экземпляр парсера * @returns {string|number|Date} - Очищенное значение
   - Class: **ExcelParser**
-    - *Описание:* Базовая проверка на null/undefined Если это дата Если это число Проверка на Excel serial date Преобразование в строку и базовая очистка Проверка на формулы Проверка на HTML Проверка на число в строковом формате Ограничение длины строки
-  - Class: **ExcelProcessor**
+    - *Описание:* Базовая проверка на null/undefined Если это дата Если это число Проверка на Excel serial date Преобразование в строку и базовая очистка Проверка на формулы Проверка на HTML Проверка на число в строковом формате Ограничение длины строки и безопасная обработка
+    - *Метод:* constructor
+    - *Метод:* parse
+    - *Метод:* processWorksheet
+    - *Метод:* determineColumnTypes
+    - *Метод:* determineCellType
+    - *Метод:* isDateColumn
+    - *Метод:* isNumericColumn
+    - *Метод:* isPercentageColumn
+    - *Метод:* isCurrencyColumn
+    - *Метод:* excelDateToJSDate
+    - *Метод:* createEmptyResult
+    - *Метод:* isValidDate
+    - *Метод:* safeParseNumber
+    - *Метод:* handleSpecialCharacters
+    - *Метод:* validateCellValue
 - **Файл**: APIDataProcessor.js (язык: js)
   - Class: **APIDataProcessor**
     - *Описание:* utils/apiDataProcessor.js
     - *Метод:* constructor
+    - *Метод:* determineCellType
+    - *Метод:* isNumeric
     - *Метод:* extractValueMetadata
     - *Метод:* generateValueTags
     - *Метод:* extractTagsFromArray
@@ -535,7 +492,6 @@ backend/
     - *Метод:* createEmptyBlock
     - *Метод:* getValueByPath
     - *Метод:* flattenObject
-    - *Метод:* determineCellType
   - File_imports: **APIDataProcessor.js**
     - *Импорты:* ./baseDataProcessor
 - **Файл**: baseDataProcessor.js (язык: js)

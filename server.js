@@ -2,129 +2,181 @@ const express = require('express');
 const path = require('path');
 const multer = require('multer');
 const mongoose = require('mongoose');
+const cors = require('cors');
 require('dotenv').config();
-const { connectDB } = require('./config/db');
 const uploadRouter = require('./routes/upload');
 const searchRouter = require('./routes/search');
 
-
 const app = express();
 
+// Настройка CORS для PowerPoint надстройки
+const corsOptions = {
+    origin: ['https://localhost:3000', 'https://localhost:3001', 'https://localhost:*'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+    optionsSuccessStatus: 200
+};
 
-// Middleware для логирования запросов (улучшенная версия)
+// Middleware для логирования запросов
 app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
-    console.log('Query params:', req.query);
-    console.log('Headers:', req.headers);
+    const timestamp = new Date().toISOString();
+    const logData = {
+        timestamp,
+        method: req.method,
+        url: req.url,
+        query: req.query,
+        body: req.method === 'POST' ? req.body : undefined,
+        headers: process.env.NODE_ENV === 'development' ? req.headers : undefined
+    };
+    console.log('Request:', JSON.stringify(logData, null, 2));
     next();
 });
-
 
 // Основные middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(cors(corsOptions));
 
-
-// Настройка CORS
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-    if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
-    }
-    next();
+// Проверка здоровья сервера
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        timestamp: new Date(),
+        uptime: process.uptime(),
+        mongoConnection: mongoose.connection.readyState === 1
+    });
 });
-
-
-// Прямой маршрут для поиска
-app.get('/api/search', async (req, res) => {
-    console.log('Direct search route hit:', req.query);
-    try {
-        const searchRouter = require('./routes/search');
-        searchRouter.handle(req, res);
-    } catch (error) {
-        console.error('Search error:', error);
-        res.status(500).json({ error: 'Search failed' });
-    }
-});
-
 
 // Роуты API
 app.use('/api/search', searchRouter);
 app.use('/api/upload', uploadRouter);
 
-
 // Статические файлы
+app.use('/static', express.static(path.join(__dirname, 'public')));
 app.use(express.static(path.join(__dirname, 'add-in/src')));
-
 
 // Маршрут для taskpane.html
 app.get('/taskpane.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'add-in/src/taskpane.html'));
 });
 
-
 // Корневой маршрут
 app.get('/', (req, res) => {
-    res.send('BankAnalytics API Server is running');
+    res.json({
+        status: 'BankAnalytics API Server is running',
+        version: process.env.npm_package_version || '1.0.0',
+        environment: process.env.NODE_ENV,
+        timestamp: new Date()
+    });
 });
-
 
 // Обработка ошибок
 app.use((err, req, res, next) => {
-    console.error(`${new Date().toISOString()} Error:`, err);
-    res.status(500).json({
-        error: err.message,
-        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
-    });
-});
+    const timestamp = new Date().toISOString();
+    console.error(`${timestamp} Error:`, err);
 
+    // Форматирование ответа об ошибке
+    const errorResponse = {
+        status: 'error',
+        message: err.message,
+        timestamp,
+        path: req.path,
+        method: req.method
+    };
+
+    // Добавляем stack trace только в режиме разработки
+    if (process.env.NODE_ENV === 'development') {
+        errorResponse.stack = err.stack;
+        errorResponse.details = err.details;
+    }
+
+    res.status(err.status || 500).json(errorResponse);
+});
 
 // Обработка несуществующих маршрутов
 app.use((req, res) => {
-    console.log(`404 Not Found: ${req.method} ${req.url}`);
-    res.status(404).json({ 
+    const timestamp = new Date().toISOString();
+    console.log(`${timestamp} 404 Not Found: ${req.method} ${req.url}`);
+    res.status(404).json({
+        status: 'error',
         error: 'Route not found',
         method: req.method,
         url: req.url,
-        path: req.path
+        path: req.path,
+        timestamp
     });
 });
 
-
 const PORT = process.env.PORT || 3000;
 
+// Подключение к MongoDB с retry механизмом
+const connectDB = async (retries = 5) => {
+    try {
+        await mongoose.connect(process.env.MONGODB_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            serverSelectionTimeoutMS: 5000,
+            socketTimeoutMS: 45000,
+        });
+        console.log('MongoDB connected successfully');
+    } catch (error) {
+        if (retries > 0) {
+            console.log(`MongoDB connection failed. Retrying... (${retries} attempts left)`);
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            return connectDB(retries - 1);
+        }
+        console.error('MongoDB connection error:', error);
+        process.exit(1);
+    }
+};
 
 // Функция запуска сервера
 const startServer = async () => {
     try {
-        // Подключаемся к MongoDB
         await connectDB();
         
-        // Запускаем сервер
-        app.listen(PORT, () => {
-            console.log(`Server is running on port ${PORT}`);
-            console.log('MongoDB connected successfully');
-            console.log(`Environment: ${process.env.NODE_ENV}`);
-            console.log(`Server URL: http://localhost:${PORT}`);
-            console.log('Available routes:');
-            console.log('- GET /api/search');
-            console.log('- POST /api/upload');
-            console.log('- GET /taskpane.html');
+        const server = app.listen(PORT, () => {
+            console.log(`
+==========================================
+🚀 Server is running
+📝 Environment: ${process.env.NODE_ENV}
+🌐 URL: http://localhost:${PORT}
+📊 MongoDB: Connected
+==========================================
+Available routes:
+- GET  /api/search
+- POST /api/upload
+- GET  /taskpane.html
+- GET  /health
+==========================================
+            `);
         });
+
+        // Graceful shutdown
+        const shutdown = async () => {
+            console.log('Received shutdown signal');
+            server.close(async () => {
+                console.log('Server closed');
+                await mongoose.connection.close();
+                console.log('MongoDB connection closed');
+                process.exit(0);
+            });
+        };
+
+        process.on('SIGTERM', shutdown);
+        process.on('SIGINT', shutdown);
+
     } catch (error) {
         console.error('Failed to start server:', error);
         process.exit(1);
     }
 };
 
-
 // Запускаем сервер только если не в тестовом режиме
 if (process.env.NODE_ENV !== 'test') {
     startServer();
 }
-
 
 // Обработка необработанных ошибок
 process.on('unhandledRejection', (err) => {
@@ -132,14 +184,11 @@ process.on('unhandledRejection', (err) => {
     process.exit(1);
 });
 
-
 process.on('uncaughtException', (err) => {
     console.error('Uncaught Exception:', err);
     process.exit(1);
 });
 
-
 module.exports = app;
-
 
 

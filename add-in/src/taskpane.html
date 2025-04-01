@@ -3,32 +3,102 @@
 <head>
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
-    <title>PowerPoint Add-in</title>
-
-    <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js"></script>
-    <link href="taskpane.css" rel="stylesheet" type="text/css" />
+    <title>Bank Analytics Add-In</title>
+    <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+    <script type="text/javascript" src="taskpane.js"></script>
+    <link rel="stylesheet" type="text/css" href="taskpane.css" />
 </head>
-
 <body>
     <div class="container">
-        <div class="search-container">
-            <input type="text" id="queryInput" placeholder="Введите запрос (например: 'газпром выручка')" />
-            <button id="searchButton">Поиск</button>
-        </div>
-        
-        <div id="result"></div>
+        <!-- Заголовок -->
+        <h1>Поиск данных</h1>
 
-        <div class="help-text">
-            <h3>Примеры запросов:</h3>
-            <ul>
-                <li>"газпром выручка 2024" - выручка за конкретный год</li>
-                <li>"газпром выручка" - таблица выручки по годам</li>
-                <li>"газпром прибыль" - таблица прибыли по годам</li>
-                <li>"газпром" - все показатели</li>
-            </ul>
+        <!-- Секция поиска -->
+        <div class="search-section">
+            <div class="search-input">
+                <input type="text" 
+                    id="tag-input" 
+                    placeholder="Введите тег для поиска"
+                    aria-label="Поисковый запрос">
+                <button id="search-button" class="primary-button">Поиск</button>
+            </div>
+        </div>
+
+        <!-- Секция результатов -->
+        <div class="results-section">
+            <h2>Найденные файлы</h2>
+            <div id="files-container" class="files-container">
+                <!-- Здесь будут отображаться найденные файлы -->
+            </div>
+        </div>
+
+        <!-- Секция блоков данных -->
+        <div class="blocks-section">
+            <h2>Блоки данных</h2>
+            <div id="blocks-container" class="blocks-container">
+                <!-- Здесь будут отображаться блоки данных -->
+            </div>
+        </div>
+
+        <!-- Секция уточнения запроса -->
+        <div id="refinement-section" class="refinement-section" style="display: none;">
+            <h3>Уточнение запроса</h3>
+            <div class="refinement-info">
+                Для получения таблицы подходящего размера (максимум 6x6), 
+                добавьте уточняющие теги, например: год, квартал, регион
+            </div>
+            <div class="refinement-input">
+                <input type="text" 
+                    id="refinement-tags" 
+                    placeholder="Введите дополнительные теги через запятую"
+                    aria-label="Уточняющие теги">
+                <button id="refinement-search" class="primary-button">Уточнить</button>
+            </div>
+            <div class="refinement-examples">
+                Примеры: 2015, I квартал, Центральный регион
+            </div>
+        </div>
+
+        <!-- Секция уведомлений -->
+        <div id="notification-area" class="notification-area">
+            <!-- Здесь будут появляться уведомления -->
+        </div>
+
+        <!-- Секция загрузки -->
+        <div id="loading-overlay" class="loading-overlay" style="display: none;">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Загрузка...</div>
         </div>
     </div>
-    <script type="text/javascript" src="taskpane.js"></script>
+
+    <!-- Шаблоны для динамического контента -->
+    <template id="file-item-template">
+        <div class="file-item">
+            <div class="file-header">
+                <h3 class="file-name"></h3>
+                <span class="file-date"></span>
+            </div>
+        </div>
+    </template>
+
+    <template id="block-item-template">
+        <div class="block-item">
+            <div class="block-header">
+                <span class="block-type"></span>
+                <div class="block-dimensions"></div>
+            </div>
+            <div class="block-actions">
+                <!-- Кнопки действий будут добавлены динамически -->
+            </div>
+        </div>
+    </template>
+
+    <template id="notification-template">
+        <div class="notification">
+            <span class="notification-icon"></span>
+            <span class="notification-message"></span>
+        </div>
+    </template>
 </body>
 </html>
 

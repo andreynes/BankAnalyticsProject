@@ -1,487 +1,416 @@
-// utils/excelProcessor.js
-
-const ExcelParser = require('./excelParser');
-const fs = require('fs');
+const XLSX = require('xlsx');
 const path = require('path');
 
-class ExcelProcessor extends ExcelParser {
-    constructor(options = {}) {
-        super({
-            preserveFormatting: true,
-            detectTypes: true,
-            extractMetadata: true,
-            ...options
-        });
+class ExcelProcessor {
+    constructor() {
+        this.supportedTypes = new Set(['string', 'number', 'date', 'boolean', 'formula', 'error', 'empty']);
     }
 
-    /**
-     * Статический метод для удобства использования
-     */
-    static async processFile(filePath, options = {}) {
-        const processor = new ExcelProcessor(options);
-        return processor.process(filePath);
-    }
-
-    /**
-     * Обработка файла Excel
-     */
-    async process(filePath) {
+    async processFile(filePath) {
         try {
-            const result = await super.parse(filePath);
-            const fileStats = fs.statSync(filePath);
-
-            const blocks = [];
-            const mainBlock = {
-                type: 'table',
-                content: {
-                    headers: this.processHeaders(result.headers),
-                    rows: this.processRows(result.data),
-                    mergedCells: result.metadata.mergedCells || []
+            console.log('Processing file:', filePath);
+            const workbook = XLSX.readFile(filePath);
+            
+            const result = {
+                data: [],
+                metadata: {
+                    sheetNames: workbook.SheetNames,
+                    totalRows: 0,
+                    totalColumns: 0,
+                    processedAt: new Date()
                 },
-                metadata: {
-                    rowCount: result.data.length,
-                    columnCount: result.headers.length,
-                    types: this.analyzeColumnTypes(result.data),
-                    fileSize: fileStats.size
-                }
+                tags: []
             };
 
-            blocks.push(mainBlock);
+            // Обрабатываем каждый лист
+            for (const sheetName of workbook.SheetNames) {
+                console.log('Processing sheet:', sheetName);
+                const sheet = workbook.Sheets[sheetName];
+                const sheetData = this.processSheet(sheet);
 
-            const tags = this.generateTags(result);
+                // Добавляем данные листа
+                result.data.push({
+                    sheetName: sheetName,
+                    content: sheetData.content,
+                    headers: sheetData.headers,
+                    rows: sheetData.rows
+                });
 
-            return {
-                fileName: path.basename(filePath),
-                documentType: 'excel',
-                blocks,
-                tags,
-                metadata: {
-                    fileInfo: {
-                        size: fileStats.size,
-                        created: fileStats.birthtime,
-                        modified: fileStats.mtime,
-                        path: filePath,
-                        name: path.basename(filePath),
-                        fileSize: fileStats.size
-                    },
-                    processing: {
-                        vertical: false,
-                        totalRows: result.data.length + 1,
-                        totalColumns: result.headers.length,
-                        processedAt: new Date()
-                    },
-                    statistics: {
-                        emptyRows: this.countEmptyRows(result.data),
-                        dataCoverage: this.calculateDataCoverage(result.data),
-                        typeDistribution: this.analyzeTypeDistribution(result.data)
-                    }
-                }
-            };
-        } catch (error) {
-            if (error.code === 'ENOENT') {
-                throw new Error('File not found');
+                // Обновляем метаданные
+                result.metadata.totalRows += sheetData.rowCount;
+                result.metadata.totalColumns = Math.max(
+                    result.metadata.totalColumns,
+                    sheetData.columnCount
+                );
+
+                // Добавляем теги
+                result.tags = [...new Set([...result.tags, ...this.generateTags(sheetData)])];
             }
-            throw new Error(`Error processing file: ${error.message}`);
+
+            return result;
+
+        } catch (error) {
+            console.error('Error processing Excel file:', error);
+            throw new Error(`Failed to process Excel file: ${error.message}`);
         }
     }
 
-    /**
-     * Обработка заголовков
-     */
-    processHeaders(headers) {
-      if (!Array.isArray(headers)) return [];
-      return headers.map(h => ({
-          value: this.processValue(h),
-          level: 1,
-          metadata: this.extractMetadata(h)
-      }));
-  }
+    processSheet(sheet) {
+        const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1');
+        const data = XLSX.utils.sheet_to_json(sheet, { 
+            header: 1, 
+            raw: false,
+            dateNF: 'yyyy-mm-dd',
+            defval: ''  // значение по умолчанию для пустых ячеек
+        });
+        
+        // Анализируем структуру заголовков
+        const headerStructure = this.analyzeHeaderStructure(data);
+        
+        return {
+            content: data,
+            headers: headerStructure.headers,
+            rows: this.processRows(data.slice(headerStructure.headerRows)),
+            rowCount: data.length,
+            columnCount: headerStructure.headers.length,
+            metadata: {
+                headerLevels: headerStructure.headerLevels,
+                hasMultiLevelHeaders: headerStructure.headerLevels > 1
+            }
+        };
+    }
 
-  /**
-   * Обработка значения
-   */
-  processValue(value) {
-      if (value === null || value === undefined) {
-          return '';
-      }
+    analyzeHeaderStructure(data) {
+        let headerRows = 1;
+        let headers = [];
+        let headerLevels = 1;
 
-      // Обработка дат
-      if (value instanceof Date) {
-          return value.toISOString().split('T')[0];
-      }
+        // Определяем количество строк заголовков
+        for (let i = 0; i < Math.min(5, data.length); i++) {
+            const row = data[i];
+            if (this.isHeaderRow(row)) {
+                headerRows++;
+            } else {
+                break;
+            }
+        }
 
-      // Обработка чисел
-      if (typeof value === 'number') {
-          if (Number.isInteger(value)) {
-              return value;
+        // Обрабатываем многоуровневые заголовки
+        if (headerRows > 1) {
+            headers = this.processMultiLevelHeaders(data.slice(0, headerRows));
+            headerLevels = headerRows;
+        } else {
+            headers = data[0].map(this.processCell.bind(this));
+        }
+
+        return {
+            headers,
+            headerRows,
+            headerLevels
+        };
+    }
+
+    isHeaderRow(row) {
+        // Эвристика для определения строки заголовка
+        if (!row || row.length === 0) return false;
+
+        const nonEmptyCells = row.filter(cell => cell !== '');
+        if (nonEmptyCells.length === 0) return false;
+
+        // Проверяем характеристики, типичные для заголовков
+        const characteristics = nonEmptyCells.map(cell => ({
+            isAllCaps: typeof cell === 'string' && cell === cell.toUpperCase(),
+            hasSpecialFormat: this.hasSpecialCharacters(cell),
+            length: String(cell).length
+        }));
+
+        // Подсчитываем характеристики
+        const stats = characteristics.reduce((acc, char) => {
+            acc.allCapsCount += char.isAllCaps ? 1 : 0;
+            acc.specialFormatCount += char.hasSpecialFormat ? 1 : 0;
+            acc.averageLength += char.length;
+            return acc;
+        }, { allCapsCount: 0, specialFormatCount: 0, averageLength: 0 });
+
+        stats.averageLength /= characteristics.length;
+
+        // Определяем, является ли строка заголовком на основе характеристик
+        return (
+            stats.allCapsCount / characteristics.length > 0.5 ||
+            stats.averageLength < 30 ||
+            stats.specialFormatCount / characteristics.length < 0.3
+        );
+    }
+
+    processMultiLevelHeaders(headerRows) {
+        const headers = [];
+        const maxLevel = headerRows.length;
+
+        for (let col = 0; col < headerRows[0].length; col++) {
+            const header = {
+                value: '',
+                levels: [],
+                metadata: {}
+            };
+
+            for (let level = 0; level < maxLevel; level++) {
+                const value = headerRows[level][col];
+                if (value !== '') {
+                    header.levels.push({
+                        value: value,
+                        level: level + 1,
+                        metadata: this.extractCellMetadata(value)
+                    });
+                }
+            }
+
+            // Устанавливаем основное значение заголовка
+            header.value = header.levels[header.levels.length - 1].value;
+            header.metadata = this.extractCellMetadata(header.value);
+            headers.push(header);
+        }
+
+        return headers;
+    }
+
+    processRows(rows) {
+        return rows.map(row => row.map(cell => this.processCell(cell)));
+    }
+
+    processCell(cellValue) {
+        const type = this.determineCellType(cellValue);
+        const metadata = this.extractCellMetadata(cellValue);
+
+        return {
+            value: this.formatCellValue(cellValue, type),
+            type: type,
+            metadata: metadata
+        };
+    }
+
+    formatCellValue(value, type) {
+        switch (type) {
+            case 'date':
+                return this.formatDate(value);
+            case 'number':
+                return this.formatNumber(value);
+            case 'string':
+                return String(value).trim();
+            default:
+                return value;
+        }
+    }
+
+    formatDate(value) {
+        if (value instanceof Date) {
+            return value.toISOString().split('T')[0];
+        }
+        const date = new Date(value);
+        return !isNaN(date) ? date.toISOString().split('T')[0] : value;
+    }
+
+    formatNumber(value) {
+        const num = Number(value);
+        return !isNaN(num) ? num : value;
+    }
+
+    determineCellType(value) {
+        if (value === null || value === undefined || value === '') {
+            return 'empty';
+        }
+        if (typeof value === 'number') {
+            return 'number';
+        }
+        if (value instanceof Date) {
+            return 'date';
+        }
+        if (typeof value === 'boolean') {
+            return 'boolean';
+        }
+        if (typeof value === 'string') {
+            if (value.startsWith('=')) {
+                return 'formula';
+            }
+            // Проверка на дату
+            if (!isNaN(Date.parse(value))) {
+                return 'date';
+            }
+            // Проверка на число в строковом формате
+            if (!isNaN(value) && value.trim() !== '') {
+                return 'number';
+            }
+        }
+        return 'string';
+    }
+
+    extractCellMetadata(value) {
+        return {
+            format: this.determineCellFormat(value),
+            precision: this.determineNumericPrecision(value),
+            hasSpecialChars: this.hasSpecialCharacters(value),
+            length: value ? String(value).length : 0,
+            isMultiline: typeof value === 'string' && value.includes('\n'),
+            hasFormula: typeof value === 'string' && value.startsWith('=')
+        };
+    }
+
+    determineCellFormat(value) {
+        if (value instanceof Date) {
+            return this.determineDateFormat(value);
+        }
+        if (typeof value === 'number') {
+            return this.determineNumberFormat(value);
+        }
+        return 'general';
+    }
+
+    determineNumberFormat(value) {
+        if (Number.isInteger(value)) {
+            return 'integer';
+        }
+        // Проверяем, является ли число процентом
+        if (typeof value === 'string' && value.includes('%')) {
+            return 'percentage';
+        }
+        // Проверяем, является ли число денежным значением
+        if (typeof value === 'string' && /^[₽$€£¥]/.test(value)) {
+            return 'currency';
+        }
+        return 'decimal';
+    }
+
+    determineDateFormat(value) {
+        const dateStr = value instanceof Date ? value.toISOString() : String(value);
+        
+        const formats = {
+          'YYYY-MM-DD': /^\d{4}-\d{2}-\d{2}$/,
+          'DD.MM.YYYY': /^\d{2}\.\d{2}\.\d{4}$/,
+          'MM/DD/YYYY': /^\d{2}\/\d{2}\/\d{4}$/,
+          'YYYY.MM.DD': /^\d{4}\.\d{2}\.\d{2}$/,
+          'ISO': /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
+      };
+
+      for (const [format, regex] of Object.entries(formats)) {
+          if (regex.test(dateStr)) {
+              return format;
           }
-          // Проверка на Excel serial date
-          if (value > 25569 && value < 47483) {
-              return this.excelDateToJSDate(value);
-          }
-          return Number(value.toFixed(10)); // Сохраняем точность
       }
-
-      const strValue = String(value).trim();
-
-      // Обработка формул
-      if (strValue.startsWith('=')) {
-          return this.processFormula(strValue);
-      }
-
-      // Обработка HTML
-      if (/<[^>]*>/.test(strValue)) {
-          return strValue.replace(/<[^>]*>/g, '');
-      }
-
-      // Ограничение длины строки
-      if (strValue.length > 1000) {
-          return strValue.substring(0, 1000);
-      }
-
-      return strValue;
-  }
-
-  /**
-   * Обработка строк данных
-   */
-  processRows(data) {
-      if (!Array.isArray(data)) return [];
-      
-      return data.map((row, index) => {
-          if (!row || !row.cells) return {
-              rowNumber: index + 1,
-              cells: new Map(),
-              metadata: new Map()
-          };
-
-          const processedCells = new Map();
-          
-          for (const [key, value] of row.cells.entries()) {
-              const processedValue = this.processValue(value.value);
-              processedCells.set(key, {
-                  value: processedValue,
-                  type: this.determineCellType(processedValue),
-                  metadata: this.extractMetadata(processedValue)
-              });
-          }
-
-          return {
-              rowNumber: index + 1,
-              cells: processedCells,
-              metadata: new Map([
-                  ['isEmpty', this.isEmptyRow(row)],
-                  ['hasFormulas', this.hasFormulas(row)],
-                  ['types', this.getRowTypes(row)]
-              ])
-          };
-      });
-  }
-
-  /**
-   * Определение формата даты
-   */
-  determineDateFormat(value) {
-      if (!value) return 'unknown';
-
-      // Если это объект Date
-      if (value instanceof Date) {
-          return 'daily';
-      }
-
-      const strValue = String(value).trim();
-
-      // Проверка на год
-      if (/^\d{4}$/.test(strValue)) {
-          return 'yearly';
-      }
-
-      // Проверка на месяц/год
-      if (/^\d{2}[./-]\d{4}$/.test(strValue)) {
-          return 'monthly';
-      }
-
-      // Проверка на полную дату
-      if (/^\d{4}-\d{2}-\d{2}$/.test(strValue) ||
-          /^\d{2}[./-]\d{2}[./-]\d{4}$/.test(strValue)) {
-          return 'daily';
-      }
-
-      // Проверка на Excel serial date
-      if (typeof value === 'number' && value > 25569 && value < 47483) {
-          return 'daily';
-      }
-
       return 'unknown';
   }
 
-  /**
-   * Определение точности числа
-   */
   determineNumericPrecision(value) {
-      if (typeof value !== 'number') {
-          const num = parseFloat(value);
-          if (isNaN(num)) return 0;
-          value = num;
+      if (typeof value === 'number') {
+          const str = value.toString();
+          const decimalIndex = str.indexOf('.');
+          return decimalIndex === -1 ? 0 : str.length - decimalIndex - 1;
       }
-      const str = value.toString();
-      return str.includes('.') ? str.split('.')[1].length : 0;
-  }
-
-    /**
-     * Извлечение метаданных
-     */
-    extractMetadata(value) {
-      const metadata = {
-          precision: 0,
-          format: 'unknown',
-          hasSpecialChars: false,
-          hasUnicode: false
-      };
-
-      try {
-          if (value === null || value === undefined) {
-              return metadata;
-          }
-
-          const type = this.determineCellType(value);
-          
-          switch (type) {
-              case 'date':
-                  metadata.format = this.determineDateFormat(value);
-                  metadata.timestamp = value instanceof Date ? value.getTime() : null;
-                  break;
-                  
-              case 'number':
-                  metadata.precision = this.determineNumericPrecision(value);
-                  metadata.isScientific = /e[+-]?\d+$/i.test(String(value));
-                  break;
-                  
-              case 'percentage':
-                  const numValue = parseFloat(String(value).replace('%', ''));
-                  metadata.originalValue = numValue / 100;
-                  metadata.precision = this.determineNumericPrecision(numValue);
-                  break;
-                  
-              case 'currency':
-                  const currencyMatch = String(value).match(/[₽$€¥£]/);
-                  metadata.currency = currencyMatch ? currencyMatch[0] : '';
-                  const cleanValue = String(value).replace(/[₽$€¥£,]/g, '');
-                  metadata.originalValue = parseFloat(cleanValue);
-                  metadata.precision = this.determineNumericPrecision(metadata.originalValue);
-                  break;
-                  
-              case 'text':
-                  metadata.length = String(value).length;
-                  metadata.hasSpecialChars = /[!@#$%^&*(),.?":{}|<>]/.test(String(value));
-                  metadata.hasUnicode = /[^\u0000-\u007f]/.test(String(value));
-                  break;
-          }
-      } catch (error) {
-          console.error('Error extracting metadata:', error);
+      if (typeof value === 'string' && !isNaN(value)) {
+          const decimalIndex = value.indexOf('.');
+          return decimalIndex === -1 ? 0 : value.length - decimalIndex - 1;
       }
-
-      return metadata;
+      return null;
   }
 
-  /**
-   * Обработка формулы
-   */
-  processFormula(formula) {
-      if (!formula.startsWith('=')) {
-          return formula;
-      }
-
-      try {
-          return formula.substring(1).replace(/[<>]|javascript:|data:/gi, '').trim();
-      } catch (error) {
-          console.error('Error processing formula:', error);
-          return '';
-      }
+  hasSpecialCharacters(value) {
+      if (typeof value !== 'string') return false;
+      return /[^a-zA-Z0-9\s]/.test(value);
   }
 
-  /**
-   * Проверка на пустую строку
-   */
-  isEmptyRow(row) {
-      if (!row || !row.cells) return true;
-      return Array.from(row.cells.values())
-          .every(cell => !cell.value || String(cell.value).trim() === '');
-  }
+  generateTags(sheetData) {
+      const tags = new Set();
 
-  /**
-   * Проверка на наличие формул
-   */
-  hasFormulas(row) {
-      if (!row || !row.cells) return false;
-      return Array.from(row.cells.values())
-          .some(cell => cell.value && String(cell.value).startsWith('='));
-  }
-
-  /**
-   * Получение типов данных в строке
-   */
-  getRowTypes(row) {
-      if (!row || !row.cells) return new Set();
-      return new Set(
-          Array.from(row.cells.values())
-              .map(cell => this.determineCellType(cell.value))
-              .filter(type => type !== 'empty')
-      );
-  }
-
-  /**
-   * Анализ типов столбцов
-   */
-  analyzeColumnTypes(data) {
-      const columnTypes = new Map();
-      
-      if (!Array.isArray(data) || !data.length) return columnTypes;
-
-      data.forEach(row => {
-          if (!row || !row.cells) return;
-          
-          for (const [header, cell] of row.cells.entries()) {
-              if (!columnTypes.has(header)) {
-                  columnTypes.set(header, new Set());
+      // Добавляем теги из заголовков
+      sheetData.headers.forEach(header => {
+          if (header.value) {
+              // Добавляем основное значение заголовка
+              tags.add(header.value.toLowerCase());
+              
+              // Добавляем значения из многоуровневых заголовков
+              if (header.levels) {
+                  header.levels.forEach(level => {
+                      tags.add(level.value.toLowerCase());
+                  });
               }
-              columnTypes.get(header).add(this.determineCellType(cell.value));
           }
       });
 
-      // Определяем преобладающий тип для каждого столбца
-      for (const [header, types] of columnTypes.entries()) {
-          columnTypes.set(header, this.getDominantType(Array.from(types)));
-      }
-
-      return columnTypes;
-  }
-
-  /**
-   * Генерация тегов для данных
-   */
-  generateTags(data) {
-      const tags = new Set();
-
-      if (!data) return [];
-
-      // Добавляем теги из заголовков
-      if (Array.isArray(data.headers)) {
-          data.headers.forEach(header => {
-              if (header) {
-                  tags.add(String(header).toLowerCase());
+      // Анализируем данные для дополнительных тегов
+      sheetData.rows.forEach(row => {
+          row.forEach(cell => {
+              if (cell.type === 'string' && cell.value) {
+                  // Добавляем ключевые слова как теги
+                  const keywords = this.extractKeywords(cell.value);
+                  keywords.forEach(keyword => tags.add(keyword.toLowerCase()));
               }
           });
-      }
-
-      // Добавляем теги из данных
-      if (Array.isArray(data.data)) {
-          data.data.forEach(row => {
-              if (!row.cells) return;
-              row.cells.forEach((cell, header) => {
-                  if (cell && cell.value) {
-                      const value = String(cell.value);
-
-                      // Добавляем годы
-                      const years = value.match(/\b(19|20)\d{2}\b/g);
-                      if (years) {
-                          years.forEach(year => tags.add(year));
-                      }
-
-                      // Добавляем бизнес-метрики
-                      const metrics = ['revenue', 'profit', 'margin', 'growth', 'sales'];
-                      metrics.forEach(metric => {
-                          if (value.toLowerCase().includes(metric)) {
-                              tags.add(metric);
-                          }
-                      });
-
-                      // Добавляем заголовок как тег
-                      if (header) {
-                          tags.add(String(header).toLowerCase());
-                      }
-                  }
-              });
-          });
-      }
+      });
 
       return Array.from(tags);
   }
 
-  /**
-   * Получение преобладающего типа
-   */
-  getDominantType(types) {
-      if (!Array.isArray(types) || !types.length) return 'text';
+  extractKeywords(text) {
+      if (typeof text !== 'string') return [];
 
-      const typeCounts = types.reduce((acc, type) => {
-          acc[type] = (acc[type] || 0) + 1;
-          return acc;
-      }, {});
+      // Список стоп-слов (можно расширить)
+      const stopWords = new Set(['и', 'в', 'во', 'не', 'что', 'он', 'на', 'я', 'с', 'со', 'как', 'а', 'то', 'все', 'она', 'так', 'его', 'но', 'да', 'ты', 'к', 'у', 'же', 'вы', 'за', 'бы', 'по', 'только', 'ее', 'мне', 'было', 'вот', 'от', 'меня', 'еще', 'нет', 'о', 'из', 'ему']);
 
-      return Object.entries(typeCounts)
-          .reduce((a, b) => (a[1] > b[1] ? a : b))[0];
-  }
-
-  /**
-   * Подсчет пустых строк
-   */
-  countEmptyRows(data) {
-      if (!Array.isArray(data)) return 0;
-      return data.filter(row => this.isEmptyRow(row)).length;
-  }
-
-  /**
-   * Расчет покрытия данными
-   */
-  calculateDataCoverage(data) {
-      if (!Array.isArray(data) || !data.length) return 0;
-
-      let totalCells = 0;
-      let nonEmptyCells = 0;
-
-      data.forEach(row => {
-          if (!row.cells) return;
-          const cells = Array.from(row.cells.values());
-          totalCells += cells.length;
-          nonEmptyCells += cells.filter(cell => 
-              cell.value !== null && 
-              cell.value !== undefined && 
-              String(cell.value).trim() !== ''
-          ).length;
-      });
-
-      return totalCells ? (nonEmptyCells / totalCells) * 100 : 0;
-  }
-
-  /**
-   * Анализ распределения типов данных
-   */
-  analyzeTypeDistribution(data) {
-      const distribution = {
-          empty: 0,
-          number: 0,
-          text: 0,
-          date: 0,
-          percentage: 0,
-          currency: 0
-      };
-
-      if (!Array.isArray(data)) return distribution;
-
-      data.forEach(row => {
-          if (!row.cells) return;
-          Array.from(row.cells.values()).forEach(cell => {
-              const type = this.determineCellType(cell.value);
-              distribution[type] = (distribution[type] || 0) + 1;
+      // Разбиваем текст на слова и фильтруем
+      return text
+          .split(/[\s,\.!?;:]+/) // Разделяем по знакам препинания и пробелам
+          .filter(word => {
+              word = word.toLowerCase();
+              return word.length > 2 && // Игнорируем короткие слова
+                  !stopWords.has(word) && // Игнорируем стоп-слова
+                  !/^\d+$/.test(word); // Игнорируем числа
           });
-      });
+  }
 
-      return distribution;
+  async validateData(data) {
+      // Проверка структуры данных
+      if (!Array.isArray(data)) {
+          throw new Error('Data must be an array');
+      }
+
+      // Проверка каждого листа
+      for (const sheet of data) {
+          if (!sheet.sheetName) {
+              throw new Error('Sheet name is required');
+          }
+
+          if (!Array.isArray(sheet.content)) {
+              throw new Error(`Invalid content structure in sheet ${sheet.sheetName}`);
+          }
+
+          // Проверка заголовков
+          if (!Array.isArray(sheet.headers)) {
+              throw new Error(`Invalid headers structure in sheet ${sheet.sheetName}`);
+          }
+
+          // Проверка строк данных
+          if (!Array.isArray(sheet.rows)) {
+              throw new Error(`Invalid rows structure in sheet ${sheet.sheetName}`);
+          }
+
+          // Проверка согласованности данных
+          const headerLength = sheet.headers.length;
+          for (const row of sheet.rows) {
+              if (!Array.isArray(row) || row.length !== headerLength) {
+                  throw new Error(`Inconsistent row length in sheet ${sheet.sheetName}`);
+              }
+          }
+      }
+
+      return true;
+  }
+
+  cleanup() {
+      // Метод для очистки временных файлов или ресурсов
+      console.log('Cleaning up resources...');
   }
 }
 
 module.exports = ExcelProcessor;
+
 
 
 
