@@ -5,6 +5,7 @@ body {
     padding: 15px;
     background-color: #f5f5f5;
     color: #333;
+    line-height: 1.4;
 }
 
 .container {
@@ -13,14 +14,13 @@ body {
 }
 
 /* Заголовки */
-h1, h2, h3 {
+h2, h3 {
     color: #217346;
     margin: 0 0 15px 0;
 }
 
-h1 { font-size: 20px; }
-h2 { font-size: 16px; }
-h3 { font-size: 14px; }
+h2 { font-size: 18px; }
+h3 { font-size: 16px; }
 
 /* Секция поиска */
 .search-section {
@@ -34,6 +34,7 @@ h3 { font-size: 14px; }
 .search-input {
     display: flex;
     gap: 10px;
+    margin-bottom: 10px;
 }
 
 #tag-input {
@@ -48,6 +49,12 @@ h3 { font-size: 14px; }
     outline: none;
     border-color: #217346;
     box-shadow: 0 0 0 2px rgba(33, 115, 70, 0.1);
+}
+
+.search-hint {
+    font-size: 12px;
+    color: #666;
+    margin-top: 8px;
 }
 
 /* Кнопки */
@@ -71,24 +78,27 @@ h3 { font-size: 14px; }
     cursor: not-allowed;
 }
 
-/* Секция результатов */
-.files-container {
-    margin-top: 10px;
+/* Секция файлов */
+.files-section {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .file-item {
-    background: white;
-    padding: 12px;
-    margin-bottom: 10px;
-    border-radius: 4px;
-    border: 1px solid #ddd;
     cursor: pointer;
+    padding: 12px;
+    margin: 8px 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
     transition: all 0.2s ease;
 }
 
 .file-item:hover {
     border-color: #217346;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    background-color: #f8f9fa;
 }
 
 .file-item.selected {
@@ -102,22 +112,36 @@ h3 { font-size: 14px; }
     align-items: center;
 }
 
+.file-name {
+    font-weight: 500;
+    color: #333;
+}
+
 .file-date {
     color: #666;
     font-size: 12px;
 }
 
-/* Блоки данных */
-.blocks-container {
-    margin-top: 10px;
+/* Секция блоков */
+.blocks-section {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.blocks-hint {
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 15px;
 }
 
 .block-item {
-    background: white;
     padding: 15px;
-    margin-bottom: 10px;
-    border-radius: 4px;
+    margin: 10px 0;
     border: 1px solid #ddd;
+    border-radius: 4px;
+    transition: all 0.2s ease;
 }
 
 .block-header {
@@ -137,60 +161,34 @@ h3 { font-size: 14px; }
     font-size: 12px;
 }
 
-.block-actions {
-    margin-top: 15px;
-}
-
-/* Секция уточнения */
-.refinement-section {
+.block-preview {
+    margin-top: 10px;
+    padding: 10px;
     background: #f8f9fa;
-    padding: 15px;
     border-radius: 4px;
-    margin-top: 20px;
-    border: 1px solid #e9ecef;
 }
 
-.refinement-info {
+.table-preview {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+}
+
+.text-preview {
+    margin-bottom: 10px;
     color: #666;
     font-size: 13px;
-    margin-bottom: 10px;
     line-height: 1.4;
 }
 
-.refinement-input {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 10px;
-}
-
-.refinement-input input {
-    flex: 1;
-    padding: 8px 12px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 13px;
-}
-
-.refinement-input input:focus {
-    border-color: #217346;
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(33, 115, 70, 0.1);
-}
-
-.refinement-examples {
-    color: #666;
-    font-size: 12px;
-    font-style: italic;
-}
-
-/* Предупреждения */
 .oversized-warning {
     background-color: #fff3e0;
     color: #e65100;
-    padding: 10px;
+    padding: 12px;
     border-radius: 4px;
-    margin-bottom: 10px;
     font-size: 13px;
+    line-height: 1.4;
     border: 1px solid #ffe0b2;
 }
 
@@ -211,6 +209,7 @@ h3 { font-size: 14px; }
     background: white;
     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     animation: slideIn 0.3s ease-out;
+    max-width: 300px;
 }
 
 .notification-icon {
@@ -228,6 +227,10 @@ h3 { font-size: 14px; }
 
 .notification.warning {
     border-left: 4px solid #ff9800;
+}
+
+.notification.info {
+    border-left: 4px solid #2196f3;
 }
 
 /* Загрузка */
@@ -259,6 +262,17 @@ h3 { font-size: 14px; }
     color: #666;
 }
 
+/* Состояния "нет результатов" */
+.no-results {
+    text-align: center;
+    padding: 20px;
+    color: #666;
+    font-style: italic;
+    background: #f8f9fa;
+    border-radius: 4px;
+    border: 1px dashed #ddd;
+}
+
 /* Анимации */
 @keyframes spin {
     0% { transform: rotate(0deg); }
@@ -282,8 +296,7 @@ h3 { font-size: 14px; }
         padding: 10px;
     }
 
-    .search-input,
-    .refinement-input {
+    .search-input {
         flex-direction: column;
     }
 
@@ -299,27 +312,8 @@ h3 { font-size: 14px; }
     .notification {
         left: 20px;
         right: 20px;
+        max-width: none;
     }
-}
-
-/* Скроллбары */
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: #666;
 }
 
 

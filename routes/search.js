@@ -15,18 +15,19 @@ router.post('/', async (req, res) => {
             });
         }
 
-        // Создаем регулярное выражение для поиска без учета регистра
-        const searchRegex = new RegExp(tag, 'i');
-
         // Строим запрос для поиска по тегам
         const query = {
             $or: [
-                { globalTags: searchRegex },
-                { 'blocks.tags': searchRegex }
+                { globalTags: { $regex: `^${tag}$`, $options: 'i' } },
+                { 'blocks.tags': { $regex: `^${tag}$`, $options: 'i' } }
             ]
         };
 
         console.log('MongoDB query:', JSON.stringify(query, null, 2));
+
+        // Cначала проверим, есть ли документы с таким тегом
+        const count = await Data.countDocuments(query);
+        console.log(`Найдено документов по тегу "${tag}": ${count}`)
 
         // Получаем документы
         const documents = await Data.find(query)
@@ -38,20 +39,15 @@ router.post('/', async (req, res) => {
             })
             .sort({ uploadDate: -1 });
 
-        console.log(`Найдено документов: ${documents.length}`);
-
-        // Форматируем результаты
-        const results = documents.map(doc => ({
-            _id: doc._id,
-            fileName: doc.fileName,
-            companyName: doc.companyName,
-            uploadDate: doc.uploadDate
-        }));
+        // Логируем найденные документы
+        documents.forEach(doc => {
+            console.log(`Найден документ: ${doc.fileName}, теги:` , doc.globalTags);
+        });
 
         res.json({
             success: true,
-            count: results.length,
-            results: results
+            count: documents.length,
+            results: documents
         });
 
     } catch (error) {

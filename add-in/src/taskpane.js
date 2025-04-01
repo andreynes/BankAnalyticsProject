@@ -2,9 +2,10 @@
     // Состояние приложения
     let state = {
         selectedFileId: null,
-        currentTag: '',
-        isLoading: false,
-        selectedBlockId: null
+        currentTags: [],
+        previousTags: [], // Для отслеживания уточнения поиска
+        selectedBlockId: null,
+        isLoading: false
     };
 
     // Инициализация Office.js
@@ -26,42 +27,45 @@
             }
         });
 
-        // Инициализация секции уточнения
-        initializeRefinementSection();
+        // Начальное состояние
+        clearResults();
     }
 
     async function performSearch() {
         try {
             const tagInput = document.getElementById('tag-input');
-            const tag = tagInput.value.trim();
+            const tagsString = tagInput.value.trim().toLowerCase();
             
             if (!tag) {
-                showNotification('error', 'Введите тег для поиска');
+                showNotification('error', 'Введите теги для поиска');
                 return;
             }
 
-            state.currentTag = tag;
             showLoading();
-            clearBlocks();
+            clearResults();
 
-            console.log('Поиск по тегу:', tag);
+            console.log('Отправка запроса с тегом:',  tag);
 
             const response = await fetch('http://localhost:3000/api/search', {
-                method: 'POST',
+                method: 'POST'
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ tag })
             });
-
+            
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
             }
-
+            
             const data = await response.json();
-            console.log('Результаты поиска:', data);
+            console.log('Получены результаты:', data);
 
             if (data.success) {
+                if (data.results.length === 0) 
+                    showNotification('info', 'Документы с указанным тегом не найдены');
+                }
                 displayFiles(data.results);
             } else {
                 throw new Error(data.error || 'Ошибка при поиске');
@@ -70,7 +74,7 @@
         } catch (error) {
             console.error('Search error:', error);
             showNotification('error', `Ошибка поиска: ${error.message}`);
-            displayFiles([]);
+            clearResults();
         } finally {
             hideLoading();
         }
@@ -81,12 +85,9 @@
         container.innerHTML = '';
 
         if (!files || files.length === 0) {
-            container.innerHTML = '<div class="no-results">Файлы не найдены</div>';
+            container.innerHTML = '<div class="no-results">Файлы с указанными тегами не найдены</div>';
             return;
         }
-
-        const filesList = document.createElement('div');
-        filesList.className = 'files-list';
 
         files.forEach(file => {
             const fileElement = document.createElement('div');
@@ -94,37 +95,35 @@
             
             fileElement.innerHTML = `
                 <div class="file-header">
-                    <h3>${file.fileName}</h3>
+                    <span class="file-name">${file.fileName}</span>
                     <span class="file-date">${formatDate(file.uploadDate)}</span>
                 </div>
             `;
             
-            fileElement.addEventListener('click', async () => {
-                // Подсвечиваем выбранный файл
+            fileElement.addEventListener('click', () => {
+                // Снимаем выделение со всех файлов
                 document.querySelectorAll('.file-item').forEach(item => {
                     item.classList.remove('selected');
                 });
+                
+                // Выделяем выбранный файл
                 fileElement.classList.add('selected');
                 state.selectedFileId = file._id;
-
-                // Загружаем блоки с текущим тегом
-                await loadFileBlocks(file._id, state.currentTag);
+                
+                // Загружаем блоки для выбранного файла
+                loadFileBlocks(file._id);
             });
 
-            filesList.appendChild(fileElement);
+            container.appendChild(fileElement);
         });
-
-        container.appendChild(filesList);
     }
-
-    async function loadFileBlocks(fileId, tag) {
+    async function loadFileBlocks(fileId) {
         try {
             showLoading();
-
-            console.log('Загрузка блоков для файла:', fileId, 'с тегом:', tag);
+            console.log('Загрузка блоков для файла:', fileId, 'с тегами:', state.currentTags);
 
             const response = await fetch(
-                `http://localhost:3000/api/search/blocks/${fileId}?tag=${encodeURIComponent(tag)}`
+                `http://localhost:3000/api/search/blocks/${fileId}?tags=${encodeURIComponent(state.currentTags.join(','))}`
             );
 
             if (!response.ok) {
@@ -143,7 +142,7 @@
         } catch (error) {
             console.error('Error loading blocks:', error);
             showNotification('error', `Ошибка загрузки блоков: ${error.message}`);
-            displayBlocks([]);
+            clearBlocks();
         } finally {
             hideLoading();
         }
@@ -151,12 +150,10 @@
 
     function displayBlocks(blocks) {
         const container = document.getElementById('blocks-container');
-        const refinementSection = document.getElementById('refinement-section');
         container.innerHTML = '';
-        refinementSection.style.display = 'none';
 
         if (!blocks || blocks.length === 0) {
-            container.innerHTML = '<div class="no-results">Блоки с указанным тегом не найдены</div>';
+            container.innerHTML = '<div class="no-results">Блоки с указанными тегами не найдены</div>';
             return;
         }
 
@@ -164,48 +161,55 @@
             const blockElement = document.createElement('div');
             blockElement.className = 'block-item';
             
+            let blockContent = '';
             if (block.type === 'table') {
                 const dimensions = block.dimensions || { rows: 0, columns: 0 };
-                blockElement.innerHTML = `
+                const isOversized = dimensions.rows > 6 || dimensions.columns > 6;
+
+                blockContent = `
                     <div class="block-header">
                         <span class="block-type">Таблица</span>
-                        <div class="block-dimensions">
+                        <span class="block-dimensions">
                             Размер таблицы: ${dimensions.rows}x${dimensions.columns}
-                        </div>
+                        </span>
                     </div>
-                    ${dimensions.rows > 6 || dimensions.columns > 6 ? `
-                        <div class="oversized-warning">
-                            Уточните запрос, размер таблицы слишком большой (максимум 6x6)
-                        </div>
-                    ` : `
-                        <div class="block-actions">
-                            <button class="insert-button" onclick="insertBlock('${block.id}')">
-                                Вставить в слайд
-                            </button>
-                        </div>
-                    `}
-                `;
-
-                if (dimensions.rows > 6 || dimensions.columns > 6) {
-                    state.selectedBlockId = block.id;
-                    refinementSection.style.display = 'block';
-                }
+                    <div class="block-preview">
+                        ${isOversized ? `
+                            <div class="oversized-warning">
+                                Размер таблицы (${dimensions.rows}x${dimensions.columns}) 
+                                превышает допустимый (6x6).<br>
+                                Добавьте дополнительные теги в строку поиска выше, 
+                                чтобы уточнить данные.
+                            </div>
+                        ` : `
+                            <div class="table-preview">
+                                <span>Таблица готова к вставке</span>
+                                <button class="primary-button" onclick="insertBlock('${block.id}')">
+                                    Вставить в слайд
+                                </button>
+                            </div>
+                        `}
+                    </div>`;
             } else {
-                blockElement.innerHTML = `
+                blockContent = `
                     <div class="block-header">
-                        <span class="block-type">Текст</span>
+                        <span class="block-type">Текстовый блок</span>
                     </div>
-                    <div class="block-actions">
-                        <button class="insert-button" onclick="insertBlock('${block.id}')">
+                    <div class="block-preview">
+                        <div class="text-preview">
+                            ${block.content.text.substring(0, 100)}${block.content.text.length > 100 ? '...' : ''}
+                        </div>
+                        <button class="primary-button" onclick="insertBlock('${block.id}')">
                             Вставить в слайд
                         </button>
-                    </div>
-                `;
+                    </div>`;
             }
-            
+
+            blockElement.innerHTML = blockContent;
             container.appendChild(blockElement);
         });
     }
+
     async function insertBlock(blockId) {
         try {
             showNotification('info', 'Подготовка блока для вставки...');
@@ -224,6 +228,22 @@
             }
 
             const block = data.block;
+
+            // Проверяем размер таблицы
+            if (block.type === 'table') {
+                const dimensions = block.dimensions || { 
+                    rows: block.content.rows.length,
+                    columns: block.content.headers.length 
+                };
+
+                if (dimensions.rows > 6 || dimensions.columns > 6) {
+                    showNotification('warning', 
+                        'Размер таблицы превышает допустимый (6x6). ' +
+                        'Добавьте дополнительные теги для уточнения данных.'
+                    );
+                    return;
+                }
+            }
             
             await PowerPoint.run(async (context) => {
                 const slide = context.presentation.getActiveSlide();
@@ -251,7 +271,6 @@
             throw new Error('Неверный формат данных таблицы');
         }
 
-        // Создаем таблицу
         const shape = slide.shapes.addTable(
             content.rows.length + 1, // +1 для заголовков
             content.headers.length,
@@ -268,7 +287,7 @@
         content.rows.forEach((row, rowIndex) => {
             row.forEach((cellValue, colIndex) => {
                 const cell = shape.table.getCell(rowIndex + 1, colIndex);
-                cell.value = cellValue;
+                cell.value = cellValue ? cellValue.toString() : '';
             });
         });
     }
@@ -283,99 +302,6 @@
         shape.top = 50;
         shape.width = 400;
         shape.height = 200;
-    }
-
-    function initializeRefinementSection() {
-        const refinementButton = document.getElementById('refinement-search');
-        const refinementInput = document.getElementById('refinement-tags');
-
-        refinementButton.onclick = async () => {
-            await performRefinementSearch();
-        };
-
-        refinementInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                performRefinementSearch();
-            }
-        });
-    }
-
-    async function performRefinementSearch() {
-        try {
-            const refinementInput = document.getElementById('refinement-tags');
-            const additionalTags = refinementInput.value.trim();
-
-            if (!additionalTags) {
-                showNotification('error', 'Введите теги для уточнения запроса');
-                return;
-            }
-
-            if (!state.selectedBlockId) {
-                showNotification('error', 'Блок для уточнения не выбран');
-                return;
-            }
-
-            showLoading();
-
-            const allTags = [
-                state.currentTag,
-                ...additionalTags.split(',').map(t => t.trim())
-            ].filter(t => t);
-
-            const response = await fetch(`http://localhost:3000/api/search/refine-block/${state.selectedBlockId}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ tags: allTags })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            
-            if (data.success) {
-                if (data.block.isOversized) {
-                    showNotification('warning', 'Таблица все еще слишком большая. Попробуйте уточнить запрос.');
-                } else {
-                    displayRefinedBlock(data.block);
-                }
-            } else {
-                throw new Error(data.error || 'Ошибка уточнения запроса');
-            }
-
-        } catch (error) {
-            console.error('Refinement error:', error);
-            showNotification('error', `Ошибка уточнения: ${error.message}`);
-        } finally {
-            hideLoading();
-        }
-    }
-
-    function displayRefinedBlock(block) {
-        const container = document.getElementById('blocks-container');
-        const refinementSection = document.getElementById('refinement-section');
-        
-        container.innerHTML = `
-            <div class="block-item">
-                <div class="block-header">
-                    <span class="block-type">Таблица</span>
-                    <div class="block-dimensions">
-                        Размер таблицы: ${block.dimensions.rows}x${block.dimensions.columns}
-                    </div>
-                </div>
-                <div class="block-actions">
-                    <button class="insert-button" onclick="insertBlock('${block.id}')">
-                        Вставить в слайд
-                    </button>
-                </div>
-            </div>
-        `;
-
-        refinementSection.style.display = 'none';
-        showNotification('success', 'Таблица успешно уточнена');
     }
 
     function showLoading() {
@@ -409,7 +335,11 @@
         `;
 
         const container = document.getElementById('notification-area');
-        container.appendChild(notification);
+        if (container) {
+            // Удаляем предыдущие уведомления того же типа
+            container.querySelectorAll(`.notification.${type}`).forEach(note => note.remove());
+            container.appendChild(notification);
+        }
 
         setTimeout(() => {
             notification.remove();
@@ -424,14 +354,21 @@
         });
     }
 
-    function clearBlocks() {
-        const container = document.getElementById('blocks-container');
-        const refinementSection = document.getElementById('refinement-section');
-        if (container) {
-            container.innerHTML = '';
+    function clearResults() {
+        clearBlocks();
+        const filesContainer = document.getElementById('files-container');
+        if (filesContainer) {
+            filesContainer.innerHTML = '';
         }
-        if (refinementSection) {
-            refinementSection.style.display = 'none';
+        state.selectedFileId = null;
+        state.selectedBlockId = null;
+        state.previousTags = [];
+    }
+
+    function clearBlocks() {
+        const blocksContainer = document.getElementById('blocks-container');
+        if (blocksContainer) {
+            blocksContainer.innerHTML = '';
         }
         state.selectedBlockId = null;
     }
