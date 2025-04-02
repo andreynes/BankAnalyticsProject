@@ -93,6 +93,20 @@ backend/
 │   └── wordProcessor.test.js
 ├── updateArchitecture.py
 ├── uploads/
+│   ├── 1743503622638-Зингер отчетность3.xlsx
+│   ├── 1743503818463-Зингер отчетность3.xlsx
+│   ├── 1743503838096-Зингер отчетность3.xlsx
+│   ├── 1743504313962-Зингер отчетность3.xlsx
+│   ├── 1743504318067-Зингер отчетность3.xlsx
+│   ├── 1743504322009-Зингер отчетность3.xlsx
+│   ├── 1743504763389-Зингер отчетность3.xlsx
+│   ├── 1743504767486-Зингер отчетность3.xlsx
+│   ├── 1743505162268-Зингер отчетность3.xlsx
+│   ├── 1743505329741-urov_11subg-nm.xlsx
+│   ├── 1743506554489-urov_11subg-nm.xlsx
+│   ├── 1743507462953-urov_11subg-nm.xlsx
+│   ├── 1743508495101-urov_11subg-nm.xlsx
+│   └── 1743510298643-urov_11subg-nm.xlsx
 ├── utils/
 │   ├── APIDataProcessor.js
 │   ├── autoTagger.js
@@ -105,7 +119,9 @@ backend/
 │   └── wordProcessor.js
 ├── ~$Газпром2.xlsx
 ├── Газпром.xlsx
-└── Газпром2.xlsx
+├── Газпром2.xlsx
+├── Зингер отчетность2.xlsx
+└── Зингер отчетность3.xlsx
 ```
 
 ### Папка: .
@@ -125,6 +141,8 @@ backend/
 - ~$Газпром2.xlsx
 - Газпром.xlsx
 - Газпром2.xlsx
+- Зингер отчетность2.xlsx
+- Зингер отчетность3.xlsx
 
 **Детали по файлам:**
 - **Файл**: test-tagAssigner.js (язык: js)
@@ -154,7 +172,7 @@ backend/
   - Function: **sanitize**
 - **Файл**: server.js (язык: js)
   - File_imports: **server.js**
-    - *Импорты:* ./routes/search, ./config/db, ./routes/upload
+    - *Импорты:* ./routes/search, ./routes/upload
 - **Файл**: test-autoTagger.js (язык: js)
   - File_imports: **test-autoTagger.js**
     - *Импорты:* ./utils/autoTagger
@@ -218,24 +236,24 @@ backend/
 
 **Детали по файлам:**
 - **Файл**: taskpane.js (язык: js)
-  - Function: **showRevenueYear**
-    - *Описание:* SVG иконки Функция для получения данных из API Инициализация обработчиков событий Показываем все показатели
-  - Function: **showRevenueTable**
-  - Function: **showNetProfitTable**
-  - Function: **showCompanyIndicators**
-  - Function: **showResult**
-  - Function: **copyWithFeedback**
-  - Function: **showFeedback**
-  - Function: **copyTableHtml**
-  - Function: **formatNumber**
-  - Function: **copyChart**
-  - Function: **setupTableEventHandlers**
-    - *Описание:* Здесь можно добавить логику для создания и копирования графика
-  - Function: **setupCompanyTableEventHandlers**
+  - Function: **initializeApp**
+    - *Описание:* Состояние приложения Инициализация Office.js
+  - Function: **displayFiles**
+    - *Описание:* Привязка обработчиков событий Начальное состояние
+  - Function: **displayBlocks**
+    - *Описание:* Снимаем выделение со всех файлов Выделяем выбранный файл Загружаем блоки для выбранного файла
+  - Function: **showLoading**
+    - *Описание:* Проверяем размер таблицы Вставляем заголовки Вставляем данные
+  - Function: **hideLoading**
+  - Function: **showNotification**
+  - Function: **formatDate**
+    - *Описание:* Удаляем предыдущие уведомления того же типа
+  - Function: **clearResults**
+  - Function: **clearBlocks**
 - **Файл**: taskpane.html (язык: html)
   - Html: **taskpane.html**
     - *Описание:* HTML файл
-    - *Импорты:* taskpane.js, taskpane.css
+    - *Импорты:* taskpane.css, taskpane.js
 
 ### Папка: config
 Содержимые файлы:
@@ -262,9 +280,17 @@ backend/
 
 **Детали по файлам:**
 - **Файл**: upload.js (язык: js)
+  - Function: **extractCompanyName**
+    - *Описание:* Настройка хранилища для multer Настройка фильтра файлов Настройка multer Маршрут для загрузки файла Создаем экземпляр процессора Excel Обрабатываем файл Извлекаем название компании из имени файла Создаем блоки данных Создаем запись в базе данных Сохраняем в базу данных Отправляем успешный ответ Отправляем ответ с ошибкой Вспомогательные функции
+  - Function: **determineDataFormat**
+    - *Описание:* Удаляем расширение и специальные символы
   - File_imports: **upload.js**
-    - *Импорты:* ../utils/excelProcessor
+    - *Импорты:* ../models/Data, ../utils/excelProcessor
 - **Файл**: search.js (язык: js)
+  - Function: **validateDimensions**
+    - *Описание:* Основной маршрут поиска Строим запрос для поиска по тегам Cначала проверим, есть ли документы с таким тегом Получаем документы Логируем найденные документы Получение блоков конкретного файла Получаем все блоки документа Уточнение блока по дополнительным тегам Фильтруем данные таблицы по тегам Получение конкретного блока для вставки Проверяем размер таблицы перед отправкой Форматируем данные таблицы Для текстовых блоков Вспомогательная функция для фильтрации данных таблицы Создаем копию блока Маршрут для отладки - получение всех тегов Маршрут для отладки - получение структуры документа Маршрут для отладки - проверка данных блока Анализируем структуру данных блока Вспомогательные функции
+  - Function: **formatTableData**
+  - Function: **extractHeaderValues**
   - File_imports: **search.js**
     - *Импорты:* ../models/Data
 
@@ -298,7 +324,7 @@ backend/
     - *Импорты:* ../models
 - **Файл**: database.test.js (язык: js)
   - File_imports: **database.test.js**
-    - *Импорты:* ../models, ./setup, ../config/db
+    - *Импорты:* ./setup, ../config/db, ../models
 - **Файл**: excelFormatHandler.test.js (язык: js)
   - File_imports: **excelFormatHandler.test.js**
     - *Импорты:* ../utils/excelFormatHandler
@@ -335,7 +361,7 @@ backend/
     - *Метод:* looksLikePercentage
 - **Файл**: upload.test.js (язык: js)
   - File_imports: **upload.test.js**
-    - *Импорты:* ../config/db, ../server, ../models
+    - *Импорты:* ../models, ../config/db, ../server
 - **Файл**: excelParser.test.js (язык: js)
   - File_imports: **excelParser.test.js**
     - *Импорты:* ../utils/excelParser
@@ -355,7 +381,7 @@ backend/
     - *Импорты:* ../../utils/excelProcessor
 - **Файл**: upload.integration.test.js (язык: js)
   - File_imports: **upload.integration.test.js**
-    - *Импорты:* ../../config/db, ../utils/createTestFiles, ../../server
+    - *Импорты:* ../../config/db, ../../server, ../utils/createTestFiles
 - **Файл**: fileProcessing.test.js (язык: js)
   - File_imports: **fileProcessing.test.js**
     - *Импорты:* ../../utils/excelProcessor
@@ -380,7 +406,21 @@ backend/
     - *Описание:* * Создание большого тестового файла * @param {string} filePath - Путь для сохранения файла * @param {number} sizeInMB - Размер файла в мегабайтах
 
 ### Папка: uploads
-*(Нет файлов)*
+Содержимые файлы:
+- 1743503622638-Зингер отчетность3.xlsx
+- 1743503818463-Зингер отчетность3.xlsx
+- 1743503838096-Зингер отчетность3.xlsx
+- 1743504313962-Зингер отчетность3.xlsx
+- 1743504318067-Зингер отчетность3.xlsx
+- 1743504322009-Зингер отчетность3.xlsx
+- 1743504763389-Зингер отчетность3.xlsx
+- 1743504767486-Зингер отчетность3.xlsx
+- 1743505162268-Зингер отчетность3.xlsx
+- 1743505329741-urov_11subg-nm.xlsx
+- 1743506554489-urov_11subg-nm.xlsx
+- 1743507462953-urov_11subg-nm.xlsx
+- 1743508495101-urov_11subg-nm.xlsx
+- 1743510298643-urov_11subg-nm.xlsx
 
 ### Папка: utils
 Содержимые файлы:
@@ -414,27 +454,27 @@ backend/
     - *Импорты:* ./baseDataProcessor
 - **Файл**: excelProcessor.js (язык: js)
   - Class: **ExcelProcessor**
-    - *Описание:* utils/excelProcessor.js
-    - *Поля:* value
+    - *Поля:* headers, headerLevels, headers, word
     - *Метод:* constructor
-    - *Метод:* processHeaders
-    - *Метод:* processValue
+    - *Метод:* processSheet
+    - *Метод:* analyzeHeaderStructure
+    - *Метод:* isHeaderRow
+    - *Метод:* processMultiLevelHeaders
     - *Метод:* processRows
+    - *Метод:* processCell
+    - *Метод:* formatCellValue
+    - *Метод:* formatDate
+    - *Метод:* formatNumber
+    - *Метод:* determineCellType
+    - *Метод:* extractCellMetadata
+    - *Метод:* determineCellFormat
+    - *Метод:* determineNumberFormat
     - *Метод:* determineDateFormat
     - *Метод:* determineNumericPrecision
-    - *Метод:* extractMetadata
-    - *Метод:* processFormula
-    - *Метод:* isEmptyRow
-    - *Метод:* hasFormulas
-    - *Метод:* getRowTypes
-    - *Метод:* analyzeColumnTypes
+    - *Метод:* hasSpecialCharacters
     - *Метод:* generateTags
-    - *Метод:* getDominantType
-    - *Метод:* countEmptyRows
-    - *Метод:* calculateDataCoverage
-    - *Метод:* analyzeTypeDistribution
-  - File_imports: **excelProcessor.js**
-    - *Импорты:* ./excelParser
+    - *Метод:* extractKeywords
+    - *Метод:* cleanup
 - **Файл**: autoTagger.js (язык: js)
   - Class: **AutoTagger**
     - *Метод:* constructor

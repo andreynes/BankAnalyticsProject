@@ -3,40 +3,61 @@
 <head>
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Bank Analytics Add-In</title>
+
+
+    <!-- Office JavaScript API -->
     <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
-    <script type="text/javascript" src="taskpane.js"></script>
+
+
+    <!-- Для локальной разработки используйте эту версию Office.js -->
+    <!-- <script type="text/javascript" src="https://localhost:3000/office.js"></script> -->
+
+
+    <!-- Office UI Fabric для стилизации (опционально, но рекомендуется) -->
+    <link rel="stylesheet" href="https://static2.sharepointonline.com/files/fabric/office-ui-fabric-core/11.0.0/css/fabric.min.css">
+
+
+    <!-- Ваши стили и скрипты -->
     <link rel="stylesheet" type="text/css" href="taskpane.css" />
 </head>
-<body>
+
+
+<body class="ms-font-m ms-welcome">
     <div class="container">
         <!-- Секция поиска -->
         <div class="search-section">
-            <h2>Поиск данных</h2>
+            <h2 class="ms-font-xl">Поиск данных</h2>
             <div class="search-input">
-                <input type="text" 
-                    id="tag-input" 
+                <input type="text"
+                    id="tag-input"
+                    class="ms-TextField-field"
                     placeholder="Введите один или несколько тегов через запятую"
                     aria-label="Поисковый запрос">
-                <button id="search-button" class="primary-button">Поиск</button>
+                <button id="search-button" class="ms-Button ms-Button--primary">
+                    <span class="ms-Button-label">Поиск</span>
+                </button>
             </div>
-            <div class="search-hint">
+            <div class="search-hint ms-font-s">
                 Для уточнения поиска добавьте дополнительные теги через запятую
             </div>
         </div>
 
+
         <!-- Секция файлов -->
         <div class="files-section">
-            <h3>Найденные файлы</h3>
+            <h3 class="ms-font-l">Найденные файлы</h3>
             <div id="files-container" class="files-container">
                 <!-- Здесь будут отображаться найденные файлы -->
             </div>
         </div>
 
+
         <!-- Секция блоков -->
         <div class="blocks-section">
-            <h3>Доступные блоки</h3>
-            <div class="blocks-hint">
+            <h3 class="ms-font-l">Доступные блоки</h3>
+            <div class="blocks-hint ms-font-s">
                 Выберите файл выше, чтобы увидеть доступные блоки с указанными тегами
             </div>
             <div id="blocks-container" class="blocks-container">
@@ -44,16 +65,36 @@
             </div>
         </div>
 
+
         <!-- Секция уведомлений -->
         <div id="notification-area" class="notification-area"></div>
+
 
         <!-- Индикатор загрузки -->
         <div id="loading-overlay" class="loading-overlay" style="display: none;">
             <div class="loading-spinner"></div>
-            <div class="loading-text">Загрузка...</div>
+            <div class="loading-text ms-font-m">Загрузка...</div>
         </div>
     </div>
-</body>
+
+
+    <!-- Скрипты -->
+    <script type="text/javascript">
+        // Убедимся, что Office.js загружен перед загрузкой нашего скрипта
+        Office.onReady(function(info) {
+            // Убедимся, что мы в PowerPoint
+            if (info.host === Office.HostType.PowerPoint) {
+                // Загружаем наш основной скрипт
+                var script = document.createElement('script');
+                script.src = 'taskpane.js';
+                document.head.appendChild(script);
+            } else {
+                document.body.innerHTML = '<div class="ms-font-xl ms-fontColor-error">Это приложение работает только в PowerPoint.</div>';
+            }
+        });
+    </script>
+</head>
 </html>
+
 
 

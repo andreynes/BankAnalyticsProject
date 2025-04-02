@@ -1,23 +1,123 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <OfficeApp
-  xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-  xsi:type="TaskPaneApp">
-  <Id>2338d927-1cb1-4c60-90a9-327e981ca1aa</Id>
-  <Version>1.0.0.0</Version>
-  <ProviderName>Your Company Name</ProviderName>
-  <DefaultLocale>ru-RU</DefaultLocale>
-  <DisplayName DefaultValue="BankAnalytics Add-In"/>
-  <Description DefaultValue="Надстройка для PowerPoint для поиска и вставки данных"/>
-  <IconUrl DefaultValue="https://yourdomain.com/assets/icon-32.png"/>
-  <HighResolutionIconUrl DefaultValue="https://yourdomain.com/assets/icon-80.png"/>
-  <SupportUrl DefaultValue="https://yourdomain.com/support"/>
-  <Hosts>
-    <Host Name="Presentation"/>
-  </Hosts>
-  <DefaultSettings>
-    <!-- Если на локалхост не настроен HTTPS, используйте http:// -->
-    <SourceLocation DefaultValue="http://localhost:3000/taskpane.html"/>
-  </DefaultSettings>
-  <Permissions>ReadWriteDocument</Permissions>
+    xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+    xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
+    xsi:type="TaskPaneApp">
+
+
+    <!-- Основная информация -->
+    <Id>2338d927-1cb1-4c60-90a9-327e981ca1aa</Id>
+    <Version>1.0.0.0</Version>
+    <ProviderName>Your Company Name</ProviderName>
+    <DefaultLocale>ru-RU</DefaultLocale>
+    <DisplayName DefaultValue="BankAnalytics Add-In"/>
+    <Description DefaultValue="Надстройка для PowerPoint для поиска и вставки данных"/>
+    <IconUrl DefaultValue="https://yourdomain.com/assets/icon-32.png"/>
+    <HighResolutionIconUrl DefaultValue="https://yourdomain.com/assets/icon-80.png"/>
+    <SupportUrl DefaultValue="https://yourdomain.com/support"/>
+
+
+    <!-- Требования к API -->
+    <Requirements>
+        <Sets DefaultMinVersion="1.1">
+            <Set Name="PowerPointApi" MinVersion="1.1"/>
+            <Set Name="SharedAPI" MinVersion="1.1"/>
+        </Sets>
+    </Requirements>
+
+
+    <!-- Поддерживаемые приложения -->
+    <Hosts>
+        <Host Name="Presentation"/>
+    </Hosts>
+
+
+    <!-- Настройки по умолчанию -->
+    <DefaultSettings>
+        <SourceLocation DefaultValue="http://localhost:3000/taskpane.html"/>
+    </DefaultSettings>
+
+
+    <!-- Разрешения -->
+    <Permissions>ReadWriteDocument</Permissions>
+    <Hosts>
+        <Host Name="Presentation"/>
+    </Hosts>
+
+
+    <!-- Словари -->
+    <Dictionary>
+        <TargetDialects>
+            <TargetDialect>ru-RU</TargetDialect>
+        </TargetDialects>
+    </Dictionary>
+
+
+    <!-- Версия для современных Office приложений -->
+    <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+        <Hosts>
+            <Host xsi:type="Presentation">
+                <DesktopFormFactor>
+                    <GetStarted>
+                        <Title resid="GetStarted.Title"/>
+                        <Description resid="GetStarted.Description"/>
+                    </GetStarted>
+                    <FunctionFile resid="Commands.Url"/>
+                    <ExtensionPoint xsi:type="PrimaryCommandSurface">
+                        <CustomTab id="BankAnalytics">
+                            <Group id="CommandsGroup">
+                                <Label resid="CommandsGroup.Label"/>
+                                <Icon>
+                                    <bt:Image size="16" resid="Icon.16x16"/>
+                                    <bt:Image size="32" resid="Icon.32x32"/>
+                                    <bt:Image size="80" resid="Icon.80x80"/>
+                                </Icon>
+                                <Control xsi:type="Button" id="TaskpaneButton">
+                                    <Label resid="TaskpaneButton.Label"/>
+                                    <Supertip>
+                                        <Title resid="TaskpaneButton.Label"/>
+                                        <Description resid="TaskpaneButton.Tooltip"/>
+                                    </Supertip>
+                                    <Icon>
+                                        <bt:Image size="16" resid="Icon.16x16"/>
+                                        <bt:Image size="32" resid="Icon.32x32"/>
+                                        <bt:Image size="80" resid="Icon.80x80"/>
+                                    </Icon>
+                                    <Action xsi:type="ShowTaskpane">
+                                        <TaskpaneId>ButtonId1</TaskpaneId>
+                                        <SourceLocation resid="Taskpane.Url"/>
+                                    </Action>
+                                </Control>
+                            </Group>
+                        </CustomTab>
+                    </ExtensionPoint>
+                </DesktopFormFactor>
+            </Host>
+        </Hosts>
+        <Resources>
+            <bt:Images>
+                <bt:Image id="Icon.16x16" DefaultValue="https://yourdomain.com/assets/icon-16.png"/>
+                <bt:Image id="Icon.32x32" DefaultValue="https://yourdomain.com/assets/icon-32.png"/>
+                <bt:Image id="Icon.80x80" DefaultValue="https://yourdomain.com/assets/icon-80.png"/>
+            </bt:Images>
+            <bt:Urls>
+                <bt:Url id="Commands.Url" DefaultValue="http://localhost:3000/commands.html"/>
+                <bt:Url id="Taskpane.Url" DefaultValue="http://localhost:3000/taskpane.html"/>
+            </bt:Urls>
+            <bt:ShortStrings>
+                <bt:String id="GetStarted.Title" DefaultValue="Начало работы с BankAnalytics"/>
+                <bt:String id="CommandsGroup.Label" DefaultValue="BankAnalytics"/>
+                <bt:String id="TaskpaneButton.Label" DefaultValue="Открыть BankAnalytics"/>
+            </bt:ShortStrings>
+            <bt:LongStrings>
+                <bt:String id="GetStarted.Description" DefaultValue="Надстройка BankAnalytics успешно загружена. Перейдите на вкладку 'Главная' и нажмите 'Открыть BankAnalytics'."/>
+                <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Нажмите, чтобы открыть панель BankAnalytics"/>
+            </bt:LongStrings>
+        </Resources>
+    </VersionOverrides>
 </OfficeApp>
+
+
+
