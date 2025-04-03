@@ -292,16 +292,10 @@
             return;
         }
     
-    
         try {
             await checkOfficeSupport();
             showNotification('info', 'Подготовка блока для вставки...');
             showLoading();
-    
-    
-            console.log('\n=== Запрос блока для вставки ===');
-            console.log('ID блока:', blockId);
-    
     
             const response = await fetch(`http://localhost:3000/api/search/block/${blockId}`);
             if (!response.ok) {
@@ -309,8 +303,8 @@
             }
             
             const data = await response.json();
-            console.log('\n📥 Полученные данные с сервера:', JSON.stringify(data, null, 2));
-        
+            console.log('Полученные данные:', data);
+    
             if (!data.success || !data.block) {
                 throw new Error('Неверный формат данных блока');
             }
@@ -318,63 +312,68 @@
             const block = data.block;
     
             if (block.type === 'table') {
-                // Проверяем, что content является массивом (матрицей)
-                if (!Array.isArray(block.content)) {
-                    throw new Error('Некорректный формат данных таблицы');
-                }
-
-                console.log('\n📊 Подготовка таблицы для вставки', JSON.stringify(block.content, null, 2));
+                // Используем PowerPoint API для создания таблицы
+                await PowerPoint.run(async (context) => {
+                    // Получаем активный слайд
+                    const slide = context.presentation.getActiveSlide();
+                    
+                    // Получаем размеры таблицы
+                    const rowCount = block.content.length;
+                    const colCount = block.content[0].length;
     
-                 // Вставляем таблицу
-                 await new Promise((resolve, reject) => {
-                     Office.context.document.setSelectedDataAsync(
+                    // Создаем таблицу
+                    const table = slide.shapes.addTable(
+                        rowCount,
+                        colCount,
+                        0,   // left
+                        0,   // top
+                        500, // width
+                        300  // height
+                    );
+    
+                    // Заполняем таблицу данными
+                    for (let i = 0; i < rowCount; i++) {
+                        for (let j = 0; j < colCount; j++) {
+                            const cell = table.getCell(i, j);
+                            const value = block.content[i][j] || '';
+                            cell.setText(value.toString());
+                        }
+                    }
+    
+                    await context.sync();
+                });
+    
+                showNotification('success', 'Таблица успешно вставлена');
+            } else if (block.type === 'text') {
+                // Для текстовых блоков используем стандартный метод
+                return new Promise((resolve, reject) => {
+                    Office.context.document.setSelectedDataAsync(
                         block.content,
                         {
-                            coercionType: Office.CoercionType.Matrix
+                            coercionType: Office.CoercionType.Text
                         },
                         (result) => {
                             if (result.status === Office.AsyncResultStatus.Succeeded) {
-                                console.log('✅ Таблица успешно вставлена');
                                 resolve();
+                                showNotification('success', 'Текст успешно вставлен');
                             } else {
-                                console.error('❌ Ошибка вставки таблицы:', result.error);
                                 reject(new Error(result.error.message));
                             }
                         }
                     );
-             });
-
-            showNotification('success', 'Таблица успешно вставлена');
-        } else if (block.type === 'text') {
-            // Вставка текста
-            await new Promise((resolve, reject) => {
-                Office.context.document.setSelectedDataAsync(
-                    block.content,
-                    {
-                        coercionType: Office.CoercionType.Text
-                    },
-                    (result) => {
-                        if (result.status === Office.AsyncResultStatus.Succeeded) {
-                            resolve();
-                        } else {
-                            reject(new Error(result.error.message));
-                        }
-                    }
-                );
-            });
-
-
-            showNotification('success', 'Текст успешно вставлен');
+                });
+            }
+    
+        } catch (error) {
+            console.error('Ошибка вставки блока:', error);
+            showNotification('error', `Ошибка вставки блока: ${error.message}`);
+        } finally {
+            hideLoading();
         }
-
-
-    } catch (error) {
-        console.error('❌ Ошибка вставки блока:', error);
-        showNotification('error', `Ошибка вставки блока: ${error.message}`);
-    } finally {
-        hideLoading();
     }
-}
+    
+    
+    
 
     function showLoading() {
         const overlay = document.getElementById('loading-overlay');
