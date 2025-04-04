@@ -117,6 +117,45 @@ describe('ExcelProcessor', () => {
       });
     });
   });
+
+  describe('Block Processing', () => {
+    it('should correctly split content into blocks', async () => {
+        const processor = new ExcelProcessor();
+        const testData = [
+            ['Text content 1'],
+            ['More text'],
+            [''],
+            ['Header1', 'Header2', 'Header3'],
+            ['1', '2', '3'],
+            ['4', '5', '6'],
+            [''],
+            ['Final text content']
+        ];
+
+        const blocks = processor.analyzeAndCreateBlocks(testData);
+        
+        expect(blocks).toHaveLength(3);
+        expect(blocks[0].type).toBe('text');
+        expect(blocks[1].type).toBe('table');
+        expect(blocks[2].type).toBe('text');
+    });
+
+    it('should properly process table blocks', async () => {
+        const processor = new ExcelProcessor();
+        const testData = [
+            ['Header1', 'Header2', 'Header3'],
+            ['1', '2', '3'],
+            ['4', '5', '6']
+        ];
+
+        const blocks = processor.analyzeAndCreateBlocks(testData);
+        
+        expect(blocks).toHaveLength(1);
+        expect(blocks[0].type).toBe('table');
+        expect(blocks[0].content.headers).toHaveLength(3);
+        expect(blocks[0].content.rows).toHaveLength(2);
+    });
+  });
 });
 
 

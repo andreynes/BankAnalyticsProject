@@ -41,119 +41,44 @@ const upload = multer({
 });
 
 // Маршрут для загрузки файла
-router.post('/', upload.single('file'), async (req, res) => {
-    console.log('Получен файл:', req.file);
-    console.log('Тело запроса:', req.body);
-    
+router.post('/upload', upload.single('file'), async (req, res) => {
     try {
-        if (!req.file) {
-            return res.status(400).json({
-                success: false,
-                error: 'Файл не был загружен',
-                details: 'Файл отсутствует в запросе'
-            });
-        }
-
-        // Создаем экземпляр процессора Excel
-        const processor = new ExcelProcessor();
+        const excelProcessor = new ExcelProcessor();
+        const processedData = await excelProcessor.processFile(req.file.path);
         
-        // Обрабатываем файл
-        console.log('Processing file:', req.file.path);
-        const processedData = await processor.processFile(req.file.path);
-        
-        // Извлекаем название компании из имени файла
-        const companyName = extractCompanyName(req.file.originalname);
-
-        // Создаем блоки данных
-        const blocks = processedData.data.map((sheet, index) => ({
-            blockId: `block_${index}`,
-            type: 'table',
-            source: {
-                type: 'excel',
-                details: new Map([
-                    ['sheetName', sheet.sheetName],
-                    ['sheetIndex', index]
-                ])
-            },
-            content: {
-                headers: sheet.headers,
-                rows: sheet.rows
-            },
-            tags: [...processedData.tags], // Добавляем теги к каждому блоку
-            metadata: {
-                rowCount: sheet.rows.length,
-                columnCount: sheet.headers.length,
-                hasFormulas: false,
-                dateFormat: 'YYYY-MM-DD',
-                numberFormat: 'general'
-            }
-        }));
-
-        // Создаем запись в базе данных
-        const dataDocument = new Data({
+        // Создаем документ с блоками
+        const document = new Data({
             fileName: req.file.originalname,
             filePath: req.file.path,
-            uploadDate: new Date(),
-            companyName: companyName,
+            companyName: extractCompanyName(req.file.originalname),
             documentType: 'excel',
-            globalTags: processedData.tags,
-            blocks: blocks,
+            blocks: [], // Будем заполнять блоками
             metadata: {
-                format: determineDataFormat(processedData),
+                format: 'monthly',
                 statistics: {
-                    totalBlocks: blocks.length,
-                    totalRows: processedData.metadata.totalRows,
-                    processedAt: new Date(),
-                    fileSize: req.file.size
+                    fileSize: req.file.size,
+                    processedAt: new Date()
                 },
                 source: {
                     type: 'excel',
                     mimeType: req.file.mimetype,
                     originalName: req.file.originalname
                 }
-            },
-            status: 'complete'
-        });
-
-        // Сохраняем в базу данных
-        await dataDocument.save();
-
-        // Отправляем успешный ответ
-        res.status(200).json({
-            success: true,
-            message: 'Файл успешно загружен и обработан',
-            file: {
-                id: dataDocument._id,
-                filename: req.file.filename,
-                originalname: req.file.originalname,
-                size: req.file.size,
-                path: req.file.path
-            },
-            data: {
-                companyName: companyName,
-                blocks: blocks.length,
-                totalRows: processedData.metadata.totalRows,
-                tags: processedData.tags
-            },
-            metadata: {
-                processedAt: new Date(),
-                status: 'complete'
             }
         });
 
+        // Добавляем блоки из каждого листа
+        processedData.data.forEach(sheet => {
+            document.blocks.push(...sheet.blocks);
+        });
+
+        // Добавляем глобальные теги
+        document.globalTags = processedData.tags;
+
+        await document.save();
+        res.json({ success: true, documentId: document._id });
     } catch (error) {
-        console.error('Ошибка при обработке файла:', error);
-        
-        // Отправляем ответ с ошибкой
-        res.status(500).json({
-            success: false,
-            error: 'Ошибка при обработке файла',
-            details: error.message,
-            metadata: {
-                processedAt: new Date(),
-                status: 'failed'
-            }
-        });
+        res.status(500).json({ error: error.message });
     }
 });
 

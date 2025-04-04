@@ -1,6 +1,3 @@
-// File: routes/search.js
-// Маршруты для поиска и получения данных из базы данных
-
 const express = require('express');
 const router = express.Router();
 const Data = require('../models/Data');
@@ -10,7 +7,7 @@ router.post('/', async (req, res) => {
     try {
         console.log('\n=== Поисковый запрос ===');
         console.log('Параметры поиска:', req.body);
-        const { tags } = req.body;
+        const { tags, blockType } = req.body;
 
         if (!tags || !Array.isArray(tags) || tags.length === 0) {
             console.log('❌ Ошибка: теги не указаны');
@@ -20,18 +17,42 @@ router.post('/', async (req, res) => {
             });
         }
 
-        // Используем статический метод из модели
-        const documents = await Data.findByTags(tags);
+        // Формируем запрос с учетом типа блока
+        const query = {
+            $or: [
+                { globalTags: { $in: tags } },
+                { 'blocks.tags': { $in: tags } }
+            ]
+        };
 
+        if (blockType) {
+            query['blocks.type'] = blockType;
+        }
+
+        const documents = await Data.find(query);
         console.log(`✅ Найдено документов: ${documents.length}`);
 
-        const results = documents.map(doc => ({
-            _id: doc._id,
-            fileName: doc.fileName,
-            companyName: doc.companyName,
-            uploadDate: doc.uploadDate,
-            globalTags: doc.globalTags
-        }));
+        const results = documents.map(doc => {
+            // Фильтруем блоки по тегам и типу
+            const matchingBlocks = doc.blocks.filter(block => 
+                (block.tags.some(tag => tags.includes(tag)) || 
+                doc.globalTags.some(tag => tags.includes(tag))) &&
+                (!blockType || block.type === blockType)
+            );
+
+            return {
+                _id: doc._id,
+                fileName: doc.fileName,
+                companyName: doc.companyName,
+                uploadDate: doc.uploadDate,
+                globalTags: doc.globalTags,
+                matchingBlocks: matchingBlocks.map(block => ({
+                    blockId: block.blockId,
+                    type: block.type,
+                    tags: block.tags
+                }))
+            };
+        }).filter(doc => doc.matchingBlocks.length > 0);
 
         return res.json({
             success: true,
@@ -52,8 +73,9 @@ router.post('/', async (req, res) => {
 router.get('/blocks/:fileId', async (req, res) => {
     try {
         const { fileId } = req.params;
+        const { tags } = req.query;
         console.log('\n=== Запрос блоков файла ===');
-        console.log('Параметры запроса:', { fileId });
+        console.log('Параметры запроса:', { fileId, tags });
 
         const document = await Data.findById(fileId);
         
@@ -65,12 +87,22 @@ router.get('/blocks/:fileId', async (req, res) => {
             });
         }
 
-        // Получаем все блоки документа
-        const blocks = document.blocks.map(block => {
+        // Фильтруем блоки по тегам, если они указаны
+        let blocks = document.blocks;
+        if (tags && Array.isArray(tags) && tags.length > 0) {
+            blocks = blocks.filter(block => 
+                block.tags.some(tag => tags.includes(tag)) ||
+                document.globalTags.some(tag => tags.includes(tag))
+            );
+        }
+
+        // Форматируем блоки для ответа
+        const formattedBlocks = blocks.map(block => {
             try {
                 const formattedBlock = {
                     id: block.blockId,
                     type: block.type,
+                    tags: block.tags,
                     isOversized: false,
                     dimensions: null
                 };
@@ -93,13 +125,12 @@ router.get('/blocks/:fileId', async (req, res) => {
             }
         }).filter(block => block !== null);
 
-        console.log(`✅ Найдено блоков: ${blocks.length}`);
-        console.log('📊 Размеры блоков:', blocks.map(b => b.dimensions));
+        console.log(`✅ Найдено блоков: ${formattedBlocks.length}`);
 
         return res.json({
             success: true,
-            count: blocks.length,
-            blocks: blocks
+            count: formattedBlocks.length,
+            blocks: formattedBlocks
         });
 
     } catch (error) {
@@ -119,9 +150,7 @@ router.get('/block/:blockId', async (req, res) => {
         console.log('\n=== Запрос блока ===');
         console.log('ID блока:', blockId);
 
-        const document = await Data.findOne(
-            { 'blocks.blockId': blockId }
-        );
+        const document = await Data.findOne({ 'blocks.blockId': blockId });
 
         if (!document || !document.blocks) {
             console.log('❌ Блок не найден');
@@ -131,7 +160,6 @@ router.get('/block/:blockId', async (req, res) => {
             });
         }
 
-        // Находим нужный блок
         const block = document.blocks.find(b => b.blockId === blockId);
         
         if (!block) {
@@ -144,69 +172,69 @@ router.get('/block/:blockId', async (req, res) => {
 
         console.log('\n📦 Исходный блок из БД:', JSON.stringify(block, null, 2));
 
-        // File: routes/search.js
-        // В маршруте /block/:blockId замените блок обработки таблицы на следующий:
-
         if (block.type === 'table' && block.content) {
             try {
-                // Проверяем наличие необходимых данных
                 if (!block.content.headers || !block.content.rows) {
                     throw new Error('Некорректная структура данных таблицы');
                 }
-
-                // Создаем матрицу данных
+        
                 let matrix = [];
                 
                 // Добавляем заголовки
                 const headers = block.content.headers.map(h => h.value || '');
                 matrix.push(headers);
-
+        
                 // Добавляем строки данных
                 block.content.rows.forEach((row) => {
                     if(!row.cells) return;
-
-                    //Создаем массив для текущей строки
+        
                     const rowData = [];
                     
                     // Обрабатываем каждую ячейку в строке
-                    for (let i = 0; i < headers.length; i++) {
-                        const cell = row.cells[i.toString()];
+                    headers.forEach((_, index) => {
+                        const cell = row.cells[index.toString()];
                         
-                        if (!cell || cell.value == undefined || cell.value === null) {
+                        if (!cell || cell.value === undefined || cell.value === null) {
                             rowData.push('');
-                            continue;
+                            return;
                         }
-
+        
+                        // Форматируем значение в зависимости от типа
+                        let formattedValue = '';
                         switch (cell.type) {
                             case 'date':
                                 try {
                                     const date = new Date(cell.value);
-                                    rowData.push(date.toLocaleDateString('ru-RU'));
+                                    if (!isNaN(date)) {
+                                        formattedValue = date.toLocaleDateString('ru-RU');
+                                    } else {
+                                        formattedValue = cell.value.toString();
+                                    }
                                 } catch (e) {
-                                    rowData.push(cell.value.toString());
+                                    formattedValue = cell.value.toString();
                                 }
                                 break;
-                            case 'string':
                             case 'number':
+                                formattedValue = Number(cell.value).toLocaleString('ru-RU');
+                                break;
+                            case 'string':
                             default:
-                                rowData.push(cell.value.toString());
+                                formattedValue = cell.value.toString();
                         }
-                    }
-                      
-                    // Добавляем строку в матрицу
+                        rowData.push(formattedValue);
+                    });
+                    
                     matrix.push(rowData);
                 });
-
+        
                 // Удаляем полностью пустые строки
                 matrix = matrix.filter(row => row.some(cell => cell !== ''));
-
-                console.log('\n📊 Подготовленная матрица:', JSON.stringify(matrix, null, 2));
-
-                // Проверяем, что матрица не пустая
+        
                 if (matrix.length === 0 || matrix[0].length === 0) {
                     throw new Error('Пустая матрица после обработки');
                 }
-
+        
+                // Добавляем информацию для PowerPoint
                 return res.json({
                     success: true,
                     block: {
@@ -216,6 +244,11 @@ router.get('/block/:blockId', async (req, res) => {
                         dimensions: {
                             rows: matrix.length,
                             columns: matrix[0].length
+                        },
+                        formatting: {
+                            hasHeaders: true,
+                            firstRowAsHeaders: true,
+                            autoFitColumns: true
                         }
                     }
                 });
@@ -228,6 +261,7 @@ router.get('/block/:blockId', async (req, res) => {
                 });
             }
         }
+                
 
         // Для текстовых блоков
         if (block.type === 'text') {

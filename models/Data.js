@@ -183,6 +183,7 @@ DataSchema.statics.findByTags = function(tags) {
 
 // Индексы для оптимизации
 DataSchema.index({ globalTags: 1 });
+DataSchema.index({ 'blocks.type': 1 });
 DataSchema.index({ 'blocks.tags': 1 });
 DataSchema.index({ 'blocks.blockId': 1 });
 DataSchema.index({ uploadDate: -1 });

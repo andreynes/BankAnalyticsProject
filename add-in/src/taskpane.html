@@ -6,23 +6,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Bank Analytics Add-In</title>
 
-
     <!-- Office JavaScript API -->
     <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
 
-
-    <!-- Для локальной разработки используйте эту версию Office.js -->
-    <!-- <script type="text/javascript" src="https://localhost:3000/office.js"></script> -->
-
-
-    <!-- Office UI Fabric для стилизации (опционально, но рекомендуется) -->
+    <!-- Office UI Fabric для стилизации -->
     <link rel="stylesheet" href="https://static2.sharepointonline.com/files/fabric/office-ui-fabric-core/11.0.0/css/fabric.min.css">
 
-
-    <!-- Ваши стили и скрипты -->
+    <!-- Ваши стили -->
     <link rel="stylesheet" type="text/css" href="taskpane.css" />
 </head>
-
 
 <body class="ms-font-m ms-welcome">
     <div class="container">
@@ -35,7 +27,7 @@
                     class="ms-TextField-field"
                     placeholder="Введите один или несколько тегов через запятую"
                     aria-label="Поисковый запрос">
-                <button id="search-button" class="ms-Button ms-Button--primary">
+                <button id="search-button" class="ms-Button ms-Button--primary" onclick="handleSearch()">
                     <span class="ms-Button-label">Поиск</span>
                 </button>
             </div>
@@ -44,7 +36,6 @@
             </div>
         </div>
 
-
         <!-- Секция файлов -->
         <div class="files-section">
             <h3 class="ms-font-l">Найденные файлы</h3>
@@ -52,7 +43,6 @@
                 <!-- Здесь будут отображаться найденные файлы -->
             </div>
         </div>
-
 
         <!-- Секция блоков -->
         <div class="blocks-section">
@@ -65,10 +55,8 @@
             </div>
         </div>
 
-
         <!-- Секция уведомлений -->
         <div id="notification-area" class="notification-area"></div>
-
 
         <!-- Индикатор загрузки -->
         <div id="loading-overlay" class="loading-overlay" style="display: none;">
@@ -77,24 +65,72 @@
         </div>
     </div>
 
-
-    <!-- Скрипты -->
+    <!-- Инициализация приложения -->
     <script type="text/javascript">
-        // Убедимся, что Office.js загружен перед загрузкой нашего скрипта
+        let isInitialized = false;
+
         Office.onReady(function(info) {
-            // Убедимся, что мы в PowerPoint
             if (info.host === Office.HostType.PowerPoint) {
-                // Загружаем наш основной скрипт
-                var script = document.createElement('script');
-                script.src = 'taskpane.js';
-                document.head.appendChild(script);
+                if (!isInitialized) {
+                    isInitialized = true;
+                    
+                    // Загружаем основной скрипт
+                    var script = document.createElement('script');
+                    script.src = 'taskpane.js';
+                    script.type = 'text/javascript';
+                    
+                    script.onload = function() {
+                        // Инициализация после загрузки скрипта
+                        if (typeof initializeApp === 'function') {
+                            initializeApp();
+                            
+                            // Привязываем обработчики событий
+                            const searchButton = document.getElementById('search-button');
+                            const tagInput = document.getElementById('tag-input');
+                            
+                            if (searchButton) {
+                                searchButton.addEventListener('click', function() {
+                                    const tags = tagInput.value.split(',')
+                                        .map(tag => tag.trim())
+                                        .filter(tag => tag.length > 0);
+                                    
+                                    if (tags.length > 0) {
+                                        performSearch(tags);
+                                    } else {
+                                        showNotification('error', 'Введите хотя бы один тег');
+                                    }
+                                });
+                            }
+
+                            // Добавляем обработчик Enter для поля ввода
+                            if (tagInput) {
+                                tagInput.addEventListener('keypress', function(e) {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        searchButton.click();
+                                    }
+                                });
+                            }
+                        }
+                    };
+
+                    document.head.appendChild(script);
+                }
             } else {
                 document.body.innerHTML = '<div class="ms-font-xl ms-fontColor-error">Это приложение работает только в PowerPoint.</div>';
             }
         });
-    </script>
-</head>
-</html>
 
+        // Обработка ошибок
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            console.error('Ошибка: ', msg, '\nURL: ', url, '\nСтрока: ', lineNo, '\nКолонка: ', columnNo, '\nError: ', error);
+            if (typeof showNotification === 'function') {
+                showNotification('error', 'Произошла ошибка: ' + msg);
+            }
+            return false;
+        };
+    </script>
+</body>
+</html>
 
 

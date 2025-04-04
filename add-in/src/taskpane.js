@@ -8,6 +8,26 @@
         isLoading: false
     };
 
+    // Объявляем функции, которые будут использоваться в HTML
+    function handleSearch() {
+        const tagInput = document.getElementById('tag-input');
+        const tagsString = tagInput.value.trim();
+        
+        if (!tagsString) {
+            showNotification('error', 'Введите теги для поиска');
+            return;
+        }
+
+        const tags = tagsString.split(',')
+            .map(tag => tag.trim())
+            .filter(tag => tag.length > 0);
+
+        if (tags.length > 0) {
+            performSearch(tags);
+        } else {
+            showNotification('error', 'Введите корректные теги для поиска');
+        }
+    }
 
     // Вспомогательная функция для проверки готовности Office API
     async function checkOfficeSupport() {
@@ -28,7 +48,6 @@
         });
     }
 
-
     // Функция для отладки данных таблицы
     function logTableData(tableData) {
         console.log('=== Данные таблицы ===');
@@ -39,66 +58,36 @@
         console.log('===================');
     }
 
-
-    // Инициализация Office.js
-    Office.onReady((info) => {
-        if (info.host === Office.HostType.PowerPoint) {
-            console.log("Office.js is ready");
-            initializeApp();
-        } else {
-            console.error("This add-in only works in PowerPoint");
-        }
-    }).catch(error => {
-        console.error("Error initializing Office.js:", error);
-    });
-
-
     function initializeApp() {
         console.log("Initializing app");
         
         // Привязка обработчиков событий
-        document.getElementById('search-button').onclick = performSearch;
-        document.getElementById('tag-input').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                performSearch();
-            }
-        });
+        const searchButton = document.getElementById('search-button');
+        const tagInput = document.getElementById('tag-input');
 
+        if (searchButton) {
+            searchButton.onclick = handleSearch;
+        }
+
+        if (tagInput) {
+            tagInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSearch();
+                }
+            });
+        }
 
         // Начальное состояние
         clearResults();
     }
 
-
-    async function performSearch() {
+    async function performSearch(tags) {
         try {
-            const tagInput = document.getElementById('tag-input');
-            const tagsString = tagInput.value.trim();
-            
-            if (!tagsString) {
-                showNotification('error', 'Введите теги для поиска');
-                return;
-            }
-
-
-            // Разделяем строку на массив тегов и очищаем их
-            const tags = tagsString.split(',')
-                .map(tag => tag.trim())
-                .filter(tag => tag.length > 0);
-
-
-            if (tags.length === 0) {
-                showNotification('error', 'Введите корректные теги для поиска');
-                return;
-            }
-
-
             showLoading();
             clearResults();
 
-
             console.log('Отправка запроса с тегами:', tags);
-
 
             const response = await fetch('http://localhost:3000/api/search', {
                 method: 'POST',
@@ -108,10 +97,8 @@
                 body: JSON.stringify({ tags })
             });
 
-
             const data = await response.json();
             console.log('Получены результаты:', data);
-
 
             if (data.success) {
                 if (!data.results || data.results.length === 0) {
@@ -123,7 +110,6 @@
                 throw new Error(data.error || 'Ошибка при поиске');
             }
 
-
         } catch (error) {
             console.error('Search error:', error);
             showNotification('error', `Ошибка поиска: ${error.message}`);
@@ -131,6 +117,7 @@
             hideLoading();
         }
     }
+
     function displayFiles(files) {
         const container = document.getElementById('files-container');
         if (!container) {
@@ -139,12 +126,10 @@
         }
         container.innerHTML = '';
 
-
         if (!files || files.length === 0) {
             container.innerHTML = '<div class="no-results">Файлы с указанными тегами не найдены</div>';
             return;
         }
-
 
         files.forEach(file => {
             const fileElement = document.createElement('div');
@@ -168,11 +153,9 @@
                 loadFileBlocks(file._id);
             });
 
-
             container.appendChild(fileElement);
         });
     }
-
 
     async function loadFileBlocks(fileId) {
         try {
@@ -180,27 +163,22 @@
                 throw new Error('ID файла не указан');
             }
 
-
             showLoading();
             console.log('Загрузка блоков для файла:', fileId);
-
 
             const response = await fetch(`http://localhost:3000/api/search/blocks/${fileId}`);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-
             const data = await response.json();
             console.log('Полученные блоки:', data);
-
 
             if (data.success) {
                 displayBlocks(data.blocks);
             } else {
                 throw new Error(data.error || 'Ошибка получения блоков');
             }
-
 
         } catch (error) {
             console.error('Error loading blocks:', error);
@@ -211,7 +189,6 @@
         }
     }
 
-
     function displayBlocks(blocks) {
         const container = document.getElementById('blocks-container');
         if (!container) {
@@ -220,12 +197,10 @@
         }
         container.innerHTML = '';
 
-
         if (!blocks || blocks.length === 0) {
             container.innerHTML = '<div class="no-results">Блоки с указанными тегами не найдены</div>';
             return;
         }
-
 
         blocks.forEach(block => {
             const blockElement = document.createElement('div');
@@ -238,7 +213,6 @@
                     columns: block.content?.headers?.length || 0
                 };
                 const isOversized = dimensions.rows > 20 || dimensions.columns > 10;
-
 
                 blockContent = `
                     <div class="block-header">
@@ -281,100 +255,74 @@
                     </div>`;
             }
 
-
             blockElement.innerHTML = blockContent;
             container.appendChild(blockElement);
         });
     }
+
     async function insertBlock(blockId) {
-        if (!blockId) {
-            showNotification('error', 'ID блока не указан');
-            return;
-        }
-    
         try {
-            await checkOfficeSupport();
-            showNotification('info', 'Подготовка блока для вставки...');
             showLoading();
-    
-            const response = await fetch(`http://localhost:3000/api/search/block/${blockId}`);
-            if (!response.ok) {
-                throw new Error('Ошибка получения блока');
-            }
-            
+            const response = await fetch(`/api/search/block/${blockId}`);
             const data = await response.json();
-            console.log('Полученные данные:', data);
     
-            if (!data.success || !data.block) {
-                throw new Error('Неверный формат данных блока');
+            if (!data.success) {
+                throw new Error(data.error);
             }
     
             const block = data.block;
     
             if (block.type === 'table') {
-                // Используем PowerPoint API для создания таблицы
-                await PowerPoint.run(async (context) => {
-                    // Получаем активный слайд
-                    const slide = context.presentation.getActiveSlide();
-                    
-                    // Получаем размеры таблицы
-                    const rowCount = block.content.length;
-                    const colCount = block.content[0].length;
+                // Преобразуем таблицу в текст с табуляцией
+                const textContent = block.content
+                    .map(row => row.join('\t'))
+                    .join('\n');
     
-                    // Создаем таблицу
-                    const table = slide.shapes.addTable(
-                        rowCount,
-                        colCount,
-                        0,   // left
-                        0,   // top
-                        500, // width
-                        300  // height
-                    );
-    
-                    // Заполняем таблицу данными
-                    for (let i = 0; i < rowCount; i++) {
-                        for (let j = 0; j < colCount; j++) {
-                            const cell = table.getCell(i, j);
-                            const value = block.content[i][j] || '';
-                            cell.setText(value.toString());
+                Office.context.document.setSelectedDataAsync(
+                    textContent,
+                    {
+                        coercionType: "text"
+                    },
+                    function (result) {
+                        if (result.status === Office.AsyncResultStatus.Failed) {
+                            console.error('Ошибка вставки:', result.error);
+                            showNotification('error', 'Ошибка при вставке блока: ' + result.error.message);
+                        } else {
+                            console.log('Блок успешно вставлен');
+                            showNotification('success', 'Блок успешно вставлен');
                         }
+                        hideLoading();
                     }
-    
-                    await context.sync();
-                });
-    
-                showNotification('success', 'Таблица успешно вставлена');
+                );
             } else if (block.type === 'text') {
-                // Для текстовых блоков используем стандартный метод
-                return new Promise((resolve, reject) => {
-                    Office.context.document.setSelectedDataAsync(
-                        block.content,
-                        {
-                            coercionType: Office.CoercionType.Text
-                        },
-                        (result) => {
-                            if (result.status === Office.AsyncResultStatus.Succeeded) {
-                                resolve();
-                                showNotification('success', 'Текст успешно вставлен');
-                            } else {
-                                reject(new Error(result.error.message));
-                            }
+                // Для текстовых блоков без изменений
+                const textContent = block.content?.text || '';
+                
+                Office.context.document.setSelectedDataAsync(
+                    textContent,
+                    {
+                        coercionType: "text"
+                    },
+                    function (result) {
+                        if (result.status === Office.AsyncResultStatus.Failed) {
+                            console.error('Ошибка вставки:', result.error);
+                            showNotification('error', 'Ошибка при вставке блока: ' + result.error.message);
+                        } else {
+                            console.log('Блок успешно вставлен');
+                            showNotification('success', 'Блок успешно вставлен');
                         }
-                    );
-                });
+                        hideLoading();
+                    }
+                );
             }
     
         } catch (error) {
-            console.error('Ошибка вставки блока:', error);
-            showNotification('error', `Ошибка вставки блока: ${error.message}`);
-        } finally {
+            console.error('Ошибка при вставке блока:', error);
             hideLoading();
+            showNotification('error', 'Ошибка при вставке блока: ' + error.message);
         }
-    }
-    
-    
-    
-
+    }    
+        
     function showLoading() {
         const overlay = document.getElementById('loading-overlay');
         if (overlay) {
@@ -382,7 +330,6 @@
         }
         state.isLoading = true;
     }
-
 
     function hideLoading() {
         const overlay = document.getElementById('loading-overlay');
@@ -392,17 +339,14 @@
         state.isLoading = false;
     }
 
-
     function showNotification(type, message) {
         if (!message) return;
-
 
         const container = document.getElementById('notification-area');
         if (!container) {
             console.error('Notification container not found');
             return;
         }
-
 
         const notification = document.createElement('div');
         notification.className = `notification ${type}`;
@@ -417,11 +361,9 @@
             <span class="notification-message">${message}</span>
         `;
 
-
         // Удаляем предыдущие уведомления того же типа
         container.querySelectorAll(`.notification.${type}`).forEach(note => note.remove());
         container.appendChild(notification);
-
 
         // Автоматическое скрытие уведомления
         setTimeout(() => {
@@ -430,7 +372,6 @@
             }
         }, 3000);
     }
-
 
     function formatDate(date) {
         if (!date) return '';
@@ -447,7 +388,6 @@
         }
     }
 
-
     function clearResults() {
         clearBlocks();
         const filesContainer = document.getElementById('files-container');
@@ -459,7 +399,6 @@
         state.previousTags = [];
     }
 
-
     function clearBlocks() {
         const blocksContainer = document.getElementById('blocks-container');
         if (blocksContainer) {
@@ -468,17 +407,23 @@
         state.selectedBlockId = null;
     }
 
+    // Делаем функции доступными глобально
+    window.handleSearch = handleSearch;
+    window.performSearch = performSearch;
+    window.showNotification = showNotification;
+    window.initializeApp = initializeApp;
+    window.insertBlock = insertBlock;
+    window.showLoading = showLoading;
+    window.hideLoading = hideLoading;
 
     // Обработка ошибок сети
     window.addEventListener('offline', () => {
         showNotification('error', 'Отсутствует подключение к интернету');
     });
 
-
     window.addEventListener('online', () => {
         showNotification('success', 'Подключение к интернету восстановлено');
     });
-
 
     // Обработка ошибок Office.js
     Office.onError = function(error) {
@@ -486,10 +431,17 @@
         showNotification('error', `Ошибка Office.js: ${error.message}`);
     };
 
-
-    // Экспорт необходимых функций в глобальную область
-    window.insertBlock = insertBlock;
-
+    // Инициализация Office.js
+    Office.onReady((info) => {
+        if (info.host === Office.HostType.PowerPoint) {
+            console.log("Office.js готов");
+            initializeApp();
+        } else {
+            console.error("This add-in only works in PowerPoint");
+        }
+    }).catch(error => {
+        console.error("Error initializing Office.js:", error);
+    });
 
     // Добавляем обработчик ошибок для необработанных исключений
     window.onerror = function(message, source, lineno, colno, error) {
@@ -504,22 +456,13 @@
         return false;
     };
 
-
     // Добавляем обработчик для необработанных промисов
     window.addEventListener('unhandledrejection', function(event) {
         console.error('Необработанная ошибка промиса:', event.reason);
         showNotification('error', 'Произошла ошибка при асинхронной операции');
     });
 
-
 })();
-
-
-
-
-
-
-
 
 
 
