@@ -27,7 +27,7 @@
                     class="ms-TextField-field"
                     placeholder="Введите один или несколько тегов через запятую"
                     aria-label="Поисковый запрос">
-                <button id="search-button" class="ms-Button ms-Button--primary" onclick="handleSearch()">
+                <button id="search-button" class="ms-Button ms-Button--primary">
                     <span class="ms-Button-label">Поиск</span>
                 </button>
             </div>
@@ -55,6 +55,17 @@
             </div>
         </div>
 
+        <!-- Секция предпросмотра -->
+        <div class="preview-section">
+            <h3 class="ms-font-l">Предпросмотр данных</h3>
+            <div id="preview-container" class="preview-container">
+                <!-- Здесь будет отображаться предпросмотр данных -->
+            </div>
+            <button id="insert-button" class="ms-Button ms-Button--primary" style="display: none;">
+                <span class="ms-Button-label">Вставить в слайд</span>
+            </button>
+        </div>
+
         <!-- Секция уведомлений -->
         <div id="notification-area" class="notification-area"></div>
 
@@ -65,70 +76,19 @@
         </div>
     </div>
 
-    <!-- Инициализация приложения -->
+    <!-- Инициализация -->
     <script type="text/javascript">
-        let isInitialized = false;
-
         Office.onReady(function(info) {
             if (info.host === Office.HostType.PowerPoint) {
-                if (!isInitialized) {
-                    isInitialized = true;
-                    
-                    // Загружаем основной скрипт
-                    var script = document.createElement('script');
-                    script.src = 'taskpane.js';
-                    script.type = 'text/javascript';
-                    
-                    script.onload = function() {
-                        // Инициализация после загрузки скрипта
-                        if (typeof initializeApp === 'function') {
-                            initializeApp();
-                            
-                            // Привязываем обработчики событий
-                            const searchButton = document.getElementById('search-button');
-                            const tagInput = document.getElementById('tag-input');
-                            
-                            if (searchButton) {
-                                searchButton.addEventListener('click', function() {
-                                    const tags = tagInput.value.split(',')
-                                        .map(tag => tag.trim())
-                                        .filter(tag => tag.length > 0);
-                                    
-                                    if (tags.length > 0) {
-                                        performSearch(tags);
-                                    } else {
-                                        showNotification('error', 'Введите хотя бы один тег');
-                                    }
-                                });
-                            }
-
-                            // Добавляем обработчик Enter для поля ввода
-                            if (tagInput) {
-                                tagInput.addEventListener('keypress', function(e) {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        searchButton.click();
-                                    }
-                                });
-                            }
-                        }
-                    };
-
-                    document.head.appendChild(script);
-                }
+                // Загружаем основной скрипт
+                var script = document.createElement('script');
+                script.src = 'taskpane.js';
+                script.type = 'text/javascript';
+                document.head.appendChild(script);
             } else {
                 document.body.innerHTML = '<div class="ms-font-xl ms-fontColor-error">Это приложение работает только в PowerPoint.</div>';
             }
         });
-
-        // Обработка ошибок
-        window.onerror = function(msg, url, lineNo, columnNo, error) {
-            console.error('Ошибка: ', msg, '\nURL: ', url, '\nСтрока: ', lineNo, '\nКолонка: ', columnNo, '\nError: ', error);
-            if (typeof showNotification === 'function') {
-                showNotification('error', 'Произошла ошибка: ' + msg);
-            }
-            return false;
-        };
     </script>
 </body>
 </html>

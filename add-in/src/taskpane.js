@@ -8,10 +8,33 @@
         isLoading: false
     };
 
+    // Инициализация после загрузки DOM
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchButton = document.getElementById('search-button');
+        const tagInput = document.getElementById('tag-input');
+    
+        if (searchButton) {
+            searchButton.addEventListener('click', handleSearch);
+        }
+    
+        if (tagInput) {
+            tagInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSearch();
+                }
+            });
+        }
+    });
+    
+
     // Объявляем функции, которые будут использоваться в HTML
     function handleSearch() {
+        console.log('HandleSearch вызван')
         const tagInput = document.getElementById('tag-input');
         const tagsString = tagInput.value.trim();
+
+        console.log('Введенные теги:', tagsString);
         
         if (!tagsString) {
             showNotification('error', 'Введите теги для поиска');
@@ -21,6 +44,8 @@
         const tags = tagsString.split(',')
             .map(tag => tag.trim())
             .filter(tag => tag.length > 0);
+
+        console.log('Обработанные теги:', tags);
 
         if (tags.length > 0) {
             performSearch(tags);
@@ -81,7 +106,6 @@
         // Начальное состояние
         clearResults();
     }
-
     async function performSearch(tags) {
         try {
             showLoading();
@@ -231,9 +255,9 @@
                             </div>
                         ` : `
                             <div class="table-preview">
-                                <span>Таблица готова к вставке</span>
-                                <button class="primary-button" onclick="insertBlock('${block.id}')">
-                                    Вставить в слайд
+                                <span>Таблица готова к просмотру</span>
+                                <button class="primary-button" onclick="previewBlock('${block.id}')">
+                                    Показать данные
                                 </button>
                             </div>
                         `}
@@ -249,8 +273,8 @@
                                 `${block.content.text.substring(0, 100)}${block.content.text.length > 100 ? '...' : ''}` :
                                 'Текст отсутствует'}
                         </div>
-                        <button class="primary-button" onclick="insertBlock('${block.id}')">
-                            Вставить в слайд
+                        <button class="primary-button" onclick="previewBlock('${block.id}')">
+                            Показать данные
                         </button>
                     </div>`;
             }
@@ -259,29 +283,157 @@
             container.appendChild(blockElement);
         });
     }
+    async function previewBlock(blockId) {
+        try {
+            showLoading();
+            const response = await fetch(`/api/search/block/${blockId}`);
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error);
+            }
+
+            const block = data.block;
+            console.log('Полученный блок для предпросмотра:', block);
+
+            const previewContainer = document.getElementById('preview-container');
+            const insertButton = document.getElementById('insert-button');
+
+            if (!previewContainer || !insertButton) {
+                throw new Error('Контейнеры предпросмотра не найдены');
+            }
+
+            if (block.type === 'table') {
+                // Создаем матрицу для данных
+                const matrix = [];
+                
+                // Добавляем заголовки
+                if (block.content && block.content.headers) {
+                    const headerRow = block.content.headers.map(h => h.value);
+                    matrix.push(headerRow);
+                }
+                
+                // Добавляем строки с данными
+                if (block.content && block.content.rows) {
+                    block.content.rows.forEach(row => {
+                        if (row.cells) {
+                            const rowData = [];
+                            for (let i = 0; i < block.content.headers.length; i++) {
+                                const cell = row.cells[i.toString()];
+                                if (cell && cell.value !== undefined) {
+                                    if (cell.type === 'date') {
+                                        try {
+                                            const date = new Date(cell.value);
+                                            rowData.push(date.toLocaleDateString('ru-RU'));
+                                        } catch {
+                                            rowData.push(cell.value);
+                                        }
+                                    } else {
+                                        rowData.push(cell.value.toString());
+                                    }
+                                } else {
+                                    rowData.push('');
+                                }
+                            }
+                            matrix.push(rowData);
+                        }
+                    });
+                }
+
+                // Создаем HTML таблицу для предпросмотра
+                let tableHtml = '<table class="preview-table">';
+                matrix.forEach((row, rowIndex) => {
+                    tableHtml += '<tr>';
+                    row.forEach(cell => {
+                        tableHtml += rowIndex === 0 ? 
+                            `<th>${cell}</th>` : 
+                            `<td>${cell}</td>`;
+                    });
+                    tableHtml += '</tr>';
+                });
+                tableHtml += '</table>';
+
+                previewContainer.innerHTML = tableHtml;
+            } else {
+                previewContainer.innerHTML = `<div class="preview-text">${block.content.text || ''}</div>`;
+            }
+
+            // Показываем кнопку вставки и привязываем обработчик
+            insertButton.style.display = 'block';
+            insertButton.onclick = () => insertBlock(blockId);
+
+            hideLoading();
+        } catch (error) {
+            console.error('Ошибка при предпросмотре блока:', error);
+            hideLoading();
+            showNotification('error', 'Ошибка при загрузке предпросмотра: ' + error.message);
+        }
+    }
 
     async function insertBlock(blockId) {
         try {
             showLoading();
             const response = await fetch(`/api/search/block/${blockId}`);
             const data = await response.json();
-    
+
             if (!data.success) {
                 throw new Error(data.error);
             }
-    
+
             const block = data.block;
-    
+            console.log('Полученный блок:', block);
+
             if (block.type === 'table') {
-                // Преобразуем таблицу в текст с табуляцией
-                const textContent = block.content
+                // Создаем матрицу для данных
+                const matrix = [];
+                
+                // Добавляем заголовки
+                if (block.content && block.content.headers) {
+                    const headerRow = block.content.headers.map(h => h.value);
+                    matrix.push(headerRow);
+                }
+                
+                // Добавляем строки с данными
+                if (block.content && block.content.rows) {
+                    block.content.rows.forEach(row => {
+                        if (row.cells) {
+                            const rowData = [];
+                            for (let i = 0; i < block.content.headers.length; i++) {
+                                const cell = row.cells[i.toString()];
+                                if (cell && cell.value !== undefined) {
+                                    if (cell.type === 'date') {
+                                        try {
+                                            const date = new Date(cell.value);
+                                            rowData.push(date.toLocaleDateString('ru-RU'));
+                                        } catch {
+                                            rowData.push(cell.value);
+                                        }
+                                    } else {
+                                        rowData.push(cell.value.toString());
+                                    }
+                                } else {
+                                    rowData.push('');
+                                }
+                            }
+                            matrix.push(rowData);
+                        }
+                    });
+                }
+
+                console.log('Подготовленная матрица:', matrix);
+
+                // Преобразуем матрицу в текст
+                const textContent = matrix
                     .map(row => row.join('\t'))
                     .join('\n');
-    
+
+                console.log('Текст для вставки:', textContent);
+
+                // Вставляем данные
                 Office.context.document.setSelectedDataAsync(
                     textContent,
                     {
-                        coercionType: "text"
+                        coercionType: Office.CoercionType.Text
                     },
                     function (result) {
                         if (result.status === Office.AsyncResultStatus.Failed) {
@@ -294,14 +446,14 @@
                         hideLoading();
                     }
                 );
+
             } else if (block.type === 'text') {
-                // Для текстовых блоков без изменений
                 const textContent = block.content?.text || '';
                 
                 Office.context.document.setSelectedDataAsync(
                     textContent,
                     {
-                        coercionType: "text"
+                        coercionType: Office.CoercionType.Text
                     },
                     function (result) {
                         if (result.status === Office.AsyncResultStatus.Failed) {
@@ -315,14 +467,14 @@
                     }
                 );
             }
-    
+
         } catch (error) {
             console.error('Ошибка при вставке блока:', error);
             hideLoading();
             showNotification('error', 'Ошибка при вставке блока: ' + error.message);
         }
-    }    
-        
+    }
+
     function showLoading() {
         const overlay = document.getElementById('loading-overlay');
         if (overlay) {
@@ -415,6 +567,7 @@
     window.insertBlock = insertBlock;
     window.showLoading = showLoading;
     window.hideLoading = hideLoading;
+    window.previewBlock = previewBlock;
 
     // Обработка ошибок сети
     window.addEventListener('offline', () => {
@@ -463,6 +616,9 @@
     });
 
 })();
+
+
+
 
 
 
